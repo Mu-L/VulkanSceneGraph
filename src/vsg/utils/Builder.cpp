@@ -1,6 +1,7 @@
 
 #include <vsg/io/Logger.h>
 #include <vsg/io/read.h>
+#include <vsg/nodes/CullNode.h>
 #include <vsg/nodes/StateGroup.h>
 #include <vsg/nodes/VertexIndexDraw.h>
 #include <vsg/state/ColorBlendState.h>
@@ -13,13 +14,20 @@
 #include <vsg/state/MultisampleState.h>
 #include <vsg/state/RasterizationState.h>
 #include <vsg/state/VertexInputState.h>
-#include <vsg/state/ViewDependentState.h>
 #include <vsg/state/ViewportState.h>
 #include <vsg/state/material.h>
 #include <vsg/utils/Builder.h>
-#include <vsg/utils/GraphicsPipelineConfig.h>
+#include <vsg/utils/GraphicsPipelineConfigurator.h>
 
 using namespace vsg;
+
+Builder::Builder()
+{
+}
+
+Builder::~Builder()
+{
+}
 
 void Builder::assignCompileTraversal(ref_ptr<CompileTraversal> ct)
 {
@@ -35,21 +43,27 @@ ref_ptr<StateGroup> Builder::createStateGroup(const StateInfo& stateInfo)
         else
             sharedObjects = vsg::SharedObjects::create();
     }
-    if (!shaderSet)
+
+    ref_ptr<ShaderSet> activeShaderSet = shaderSet;
+    if (!activeShaderSet)
     {
         if (stateInfo.lighting)
-            shaderSet = createPhongShaderSet(options);
+        {
+            if (!_phongShaderSet) _phongShaderSet = createPhongShaderSet(options);
+            activeShaderSet = _phongShaderSet;
+        }
         else
-            shaderSet = createFlatShadedShaderSet(options);
-        //shaderSet = createPhysicsBasedRenderingShaderSet(options);
+        {
+            if (!_flatShadedShaderSet) _flatShadedShaderSet = createFlatShadedShaderSet(options);
+            activeShaderSet = _flatShadedShaderSet;
+        }
     }
 
-    auto graphicsPipelineConfig = vsg::GraphicsPipelineConfig::create(shaderSet);
+    auto graphicsPipelineConfig = vsg::GraphicsPipelineConfigurator::create(activeShaderSet);
+
+    if (options) graphicsPipelineConfig->assignInheritedState(options->inheritedState);
 
     auto& defines = graphicsPipelineConfig->shaderHints->defines;
-
-    // set up graphics pipeline
-    vsg::Descriptors descriptors;
 
     // set up graphics pipeline
     DescriptorSetLayoutBindings descriptorBindings;
@@ -61,9 +75,9 @@ ref_ptr<StateGroup> Builder::createStateGroup(const StateInfo& stateInfo)
 
         if (sharedObjects) sharedObjects->share(sampler);
 
-        graphicsPipelineConfig->assignTexture(descriptors, "diffuseMap", stateInfo.image, sampler);
+        graphicsPipelineConfig->assignTexture("diffuseMap", stateInfo.image, sampler);
 
-        if (stateInfo.greyscale) defines.insert("VSG_GREYSACLE_DIFFUSE_MAP");
+        if (stateInfo.greyscale) defines.insert("VSG_GREYSCALE_DIFFUSE_MAP");
     }
 
     if (stateInfo.displacementMap)
@@ -74,24 +88,15 @@ ref_ptr<StateGroup> Builder::createStateGroup(const StateInfo& stateInfo)
 
         if (sharedObjects) sharedObjects->share(sampler);
 
-        graphicsPipelineConfig->assignTexture(descriptors, "displacementMap", stateInfo.displacementMap, sampler);
+        graphicsPipelineConfig->assignTexture("displacementMap", stateInfo.displacementMap, sampler);
     }
 
-    // set up pass of material
-    auto mat = vsg::PhongMaterialValue::create();
-    mat->value().specular = vec4(0.5f, 0.5f, 0.5f, 1.0f);
-
-    graphicsPipelineConfig->assignUniform(descriptors, "material", mat);
-
-    if (sharedObjects) sharedObjects->share(descriptors);
-
-    // set up ViewDependentState
-    ref_ptr<ViewDescriptorSetLayout> vdsl;
-    if (sharedObjects)
-        vdsl = sharedObjects->shared_default<ViewDescriptorSetLayout>();
-    else
-        vdsl = ViewDescriptorSetLayout::create();
-    graphicsPipelineConfig->additionalDescriptorSetLayout = vdsl;
+    if (const auto& materialBinding = activeShaderSet->getDescriptorBinding("material"))
+    {
+        ref_ptr<Data> mat = materialBinding.data;
+        if (!mat) mat = vsg::PhongMaterialValue::create();
+        graphicsPipelineConfig->assignDescriptor("material", mat);
+    }
 
     graphicsPipelineConfig->enableArray("vsg_Vertex", VK_VERTEX_INPUT_RATE_VERTEX, 12);
     graphicsPipelineConfig->enableArray("vsg_Normal", VK_VERTEX_INPUT_RATE_VERTEX, 12);
@@ -99,26 +104,56 @@ ref_ptr<StateGroup> Builder::createStateGroup(const StateInfo& stateInfo)
 
     if (stateInfo.instance_colors_vec4)
     {
+        // vec4 colors
         graphicsPipelineConfig->enableArray("vsg_Color", VK_VERTEX_INPUT_RATE_INSTANCE, 16);
     }
+    else
+    {
+        // ubvec4 colors
+        graphicsPipelineConfig->enableArray("vsg_Color", VK_VERTEX_INPUT_RATE_INSTANCE, 4);
+    }
 
-    if (stateInfo.instance_positions_vec3)
+    if (stateInfo.billboard)
+    {
+        graphicsPipelineConfig->enableArray("vsg_position_scaleDistance", VK_VERTEX_INPUT_RATE_INSTANCE, 16);
+    }
+    else if (stateInfo.instance_positions_vec3)
     {
         graphicsPipelineConfig->enableArray("vsg_position", VK_VERTEX_INPUT_RATE_INSTANCE, 12);
     }
 
+    struct SetPipelineStates : public Visitor
+    {
+        const StateInfo& si;
+        explicit SetPipelineStates(const StateInfo& in) :
+            si(in) {}
+
+        void apply(Object& object) override
+        {
+            object.traverse(*this);
+        }
+
+        void apply(RasterizationState& rs) override
+        {
+            if (si.two_sided) rs.cullMode = VK_CULL_MODE_NONE;
+        }
+
+        void apply(InputAssemblyState& ias) override
+        {
+            if (si.wireframe) ias.topology = VK_PRIMITIVE_TOPOLOGY_LINE_LIST;
+        }
+
+        void apply(ColorBlendState& cbs) override
+        {
+            cbs.configureAttachments(si.blending);
+        }
+    } sps(stateInfo);
+
+    graphicsPipelineConfig->accept(sps);
+
     if (stateInfo.two_sided)
     {
-        graphicsPipelineConfig->rasterizationState->cullMode = VK_CULL_MODE_NONE;
         defines.insert("VSG_TWO_SIDED_LIGHTING");
-    }
-
-    graphicsPipelineConfig->colorBlendState->attachments = ColorBlendState::ColorBlendAttachments{
-        {stateInfo.blending, VK_BLEND_FACTOR_SRC_ALPHA, VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA, VK_BLEND_OP_ADD, VK_BLEND_FACTOR_SRC_ALPHA, VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA, VK_BLEND_OP_SUBTRACT, VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT}};
-
-    if (stateInfo.wireframe)
-    {
-        graphicsPipelineConfig->inputAssemblyState->topology = VK_PRIMITIVE_TOPOLOGY_LINE_LIST;
     }
 
     // if required initialize GraphicsPipeline/Layout etc.
@@ -127,27 +162,17 @@ ref_ptr<StateGroup> Builder::createStateGroup(const StateInfo& stateInfo)
     else
         graphicsPipelineConfig->init();
 
-    auto descriptorSet = vsg::DescriptorSet::create(graphicsPipelineConfig->descriptorSetLayout, descriptors);
-    if (sharedObjects) sharedObjects->share(descriptorSet);
+    StateCommands stateCommands;
+    if (graphicsPipelineConfig->copyTo(stateCommands, sharedObjects))
+    {
+        // create StateGroup as the root of the scene/command graph to hold the GraphicsPipeline, and binding of Descriptors to decorate the whole graph
+        auto stateGroup = vsg::StateGroup::create();
+        stateGroup->stateCommands.swap(stateCommands);
+        stateGroup->prototypeArrayState = graphicsPipelineConfig->getSuitableArrayState();
+        return stateGroup;
+    }
 
-    auto bindDescriptorSet = vsg::BindDescriptorSet::create(VK_PIPELINE_BIND_POINT_GRAPHICS, graphicsPipelineConfig->layout, 0, descriptorSet);
-    if (sharedObjects) sharedObjects->share(bindDescriptorSet);
-
-    // create StateGroup as the root of the scene/command graph to hold the GraphicsProgram, and binding of Descriptors to decorate the whole graph
-    auto stateGroup = vsg::StateGroup::create();
-    stateGroup->add(graphicsPipelineConfig->bindGraphicsPipeline);
-    stateGroup->add(bindDescriptorSet);
-
-    // assign any custom ArrayState that may be required.
-    stateGroup->prototypeArrayState = shaderSet->getSuitableArrayState(graphicsPipelineConfig->shaderHints->defines);
-
-    auto bindViewDescriptorSets = BindViewDescriptorSets::create(VK_PIPELINE_BIND_POINT_GRAPHICS, graphicsPipelineConfig->layout, 1);
-    if (sharedObjects) sharedObjects->share(bindViewDescriptorSets);
-    stateGroup->add(bindViewDescriptorSets);
-
-    //if (sharedObjects) vsg::debug_stream([&](auto& fout) { sharedObjects->report(fout); });
-
-    return stateGroup;
+    return {};
 }
 
 void Builder::transform(const mat4& matrix, ref_ptr<vec3Array> vertices, ref_ptr<vec3Array> normals)
@@ -168,9 +193,28 @@ void Builder::transform(const mat4& matrix, ref_ptr<vec3Array> vertices, ref_ptr
     }
 }
 
+vsg::ref_ptr<vsg::Data> Builder::instancePositions(const GeometryInfo& info, uint32_t& instanceCount)
+{
+    instanceCount = 1;
+
+    if (info.positions && info.positions->dataAvailable())
+    {
+        instanceCount = static_cast<uint32_t>(info.positions->valueCount());
+        return info.positions;
+    }
+    return {};
+}
+
+vsg::ref_ptr<vsg::Data> Builder::instanceColors(const GeometryInfo& info, uint32_t instanceCount)
+{
+    if (info.colors && (info.colors->valueCount() == instanceCount))
+        return info.colors;
+    else
+        return vec4Array::create(instanceCount, info.color);
+}
+
 vec3 Builder::y_texcoord(const StateInfo& info) const
 {
-
     if ((info.image && info.image->properties.origin == Origin::TOP_LEFT) ||
         (info.displacementMap && info.displacementMap->properties.origin == Origin::TOP_LEFT))
     {
@@ -182,30 +226,65 @@ vec3 Builder::y_texcoord(const StateInfo& info) const
     }
 }
 
+ref_ptr<Node> Builder::decorateAndCompileIfRequired(const GeometryInfo& info, const StateInfo& stateInfo, ref_ptr<Node> node)
+{
+    ref_ptr<Node> subgraph = node;
+
+    // create StateGroup as the root of the scene/command graph to hold the GraphicsPipeline, and binding of Descriptors to decorate the whole graph
+    if (auto stateGroup = createStateGroup(stateInfo))
+    {
+        stateGroup->addChild(node);
+        subgraph = stateGroup;
+    }
+
+    if (info.cullNode)
+    {
+        auto cullNode = vsg::CullNode::create();
+        cullNode->child = subgraph;
+
+        if (info.positions)
+        {
+            if (auto v3a = info.positions.cast<vec3Array>())
+            {
+                box bound;
+                for (const auto& v : *v3a)
+                {
+                    bound.add(v);
+                }
+                cullNode->bound.center = (bound.min + bound.max) * 0.5f;
+                cullNode->bound.radius = vsg::length(bound.max - bound.min) * 0.5 + vsg::length(info.dx + info.dy + info.dz) * 0.5;
+            }
+            else
+            {
+                // unable to compute bound so do not decorate with a CullNode.
+                return subgraph;
+            }
+        }
+        else
+        {
+            cullNode->bound.center = info.position;
+            cullNode->bound.radius = vsg::length(info.dx + info.dy + info.dz) * 0.5;
+        }
+
+        subgraph = cullNode;
+    }
+
+    if (compileTraversal) compileTraversal->compile(subgraph);
+
+    return subgraph;
+}
+
 ref_ptr<Node> Builder::createBox(const GeometryInfo& info, const StateInfo& stateInfo)
 {
-    auto& subgraph = _boxes[info];
+    auto& subgraph = _boxes[std::make_pair(info, stateInfo)];
     if (subgraph)
     {
         return subgraph;
     }
 
     uint32_t instanceCount = 1;
-    auto positions = info.positions;
-    if (positions)
-    {
-        if (positions->size() >= 1)
-            instanceCount = static_cast<uint32_t>(positions->size());
-        else
-            positions = {};
-    }
-
-    auto colors = info.colors;
-    if (colors && colors->valueCount() != instanceCount) colors = {};
-    if (!colors) colors = vec4Array::create(instanceCount, info.color);
-
-    // create StateGroup as the root of the scene/command graph to hold the GraphicsProgram, and binding of Descriptors to decorate the whole graph
-    auto scenegraph = createStateGroup(stateInfo);
+    auto positions = instancePositions(info, instanceCount);
+    auto colors = instanceColors(info, instanceCount);
 
     auto dx = info.dx;
     auto dy = info.dy;
@@ -324,40 +403,22 @@ ref_ptr<Node> Builder::createBox(const GeometryInfo& info, const StateInfo& stat
     vid->indexCount = static_cast<uint32_t>(indices->size());
     vid->instanceCount = instanceCount;
 
-    scenegraph->addChild(vid);
-
-    if (compileTraversal) compileTraversal->compile(scenegraph);
-
-    subgraph = scenegraph;
+    subgraph = decorateAndCompileIfRequired(info, stateInfo, vid);
     return subgraph;
 }
 
 ref_ptr<Node> Builder::createCapsule(const GeometryInfo& info, const StateInfo& stateInfo)
 {
-    auto& subgraph = _capsules[info];
+    auto& subgraph = _capsules[std::make_pair(info, stateInfo)];
     if (subgraph)
     {
         return subgraph;
     }
 
     uint32_t instanceCount = 1;
-    auto positions = info.positions;
-    if (positions)
-    {
-        if (positions->size() >= 1)
-            instanceCount = static_cast<uint32_t>(positions->size());
-        else
-            positions = {};
-    }
-
-    auto colors = info.colors;
-    if (colors && colors->valueCount() != instanceCount) colors = {};
-    if (!colors) colors = vec4Array::create(instanceCount, info.color);
-
+    auto positions = instancePositions(info, instanceCount);
+    auto colors = instanceColors(info, instanceCount);
     auto [t_origin, t_scale, t_top] = y_texcoord(stateInfo).value;
-
-    // create StateGroup as the root of the scene/command graph to hold the GraphicsProgram, and binding of Descriptors to decorate the whole graph
-    auto scenegraph = createStateGroup(stateInfo);
 
     auto dx = info.dx * 0.5f;
     auto dy = info.dy * 0.5f;
@@ -405,7 +466,7 @@ ref_ptr<Node> Builder::createCapsule(const GeometryInfo& info, const StateInfo& 
     {
         unsigned int vi = c * 2;
         float r = float(c) / float(num_columns - 1);
-        float alpha = (r)*2.0f * PIf;
+        float alpha = (r) * 2.0f * PIf;
         v = dx * (-sinf(alpha)) + dy * (cosf(alpha));
         n = normalize(v);
 
@@ -564,40 +625,22 @@ ref_ptr<Node> Builder::createCapsule(const GeometryInfo& info, const StateInfo& 
     vid->indexCount = static_cast<uint32_t>(indices->size());
     vid->instanceCount = instanceCount;
 
-    scenegraph->addChild(vid);
-
-    if (compileTraversal) compileTraversal->compile(scenegraph);
-
-    subgraph = scenegraph;
+    subgraph = decorateAndCompileIfRequired(info, stateInfo, vid);
     return subgraph;
 }
 
 ref_ptr<Node> Builder::createCone(const GeometryInfo& info, const StateInfo& stateInfo)
 {
-    auto& subgraph = _cones[info];
+    auto& subgraph = _cones[std::make_pair(info, stateInfo)];
     if (subgraph)
     {
         return subgraph;
     }
 
     uint32_t instanceCount = 1;
-    auto positions = info.positions;
-    if (positions)
-    {
-        if (positions->size() >= 1)
-            instanceCount = static_cast<uint32_t>(positions->size());
-        else
-            positions = {};
-    }
-
-    auto colors = info.colors;
-    if (colors && colors->valueCount() != instanceCount) colors = {};
-    if (!colors) colors = vec4Array::create(instanceCount, info.color);
-
+    auto positions = instancePositions(info, instanceCount);
+    auto colors = instanceColors(info, instanceCount);
     auto [t_origin, t_scale, t_top] = y_texcoord(stateInfo).value;
-
-    // create StateGroup as the root of the scene/command graph to hold the GraphicsProgram, and binding of Descriptors to decorate the whole graph
-    auto scenegraph = createStateGroup(stateInfo);
 
     auto dx = info.dx * 0.5f;
     auto dy = info.dy * 0.5f;
@@ -647,7 +690,7 @@ ref_ptr<Node> Builder::createCone(const GeometryInfo& info, const StateInfo& sta
         {
             unsigned int vi = 1 + c;
             float r = float(c) / float(num_columns);
-            alpha = (r)*2.0f * PIf;
+            alpha = (r) * 2.0f * PIf;
             v = edge(alpha);
             n = normal(alpha);
 
@@ -707,7 +750,7 @@ ref_ptr<Node> Builder::createCone(const GeometryInfo& info, const StateInfo& sta
         {
             unsigned int vi = c * 2;
             float r = float(c) / float(num_columns - 1);
-            alpha = (r)*2.0f * PIf;
+            alpha = (r) * 2.0f * PIf;
             v = edge(alpha);
             n = normal(alpha);
 
@@ -747,7 +790,7 @@ ref_ptr<Node> Builder::createCone(const GeometryInfo& info, const StateInfo& sta
             for (unsigned int c = 1; c < num_columns - 1; ++c)
             {
                 float r = float(c) / float(num_columns - 1);
-                alpha = (r)*2.0f * PIf;
+                alpha = (r) * 2.0f * PIf;
                 v = edge(alpha);
 
                 unsigned int vi = bottom_i + c;
@@ -785,40 +828,22 @@ ref_ptr<Node> Builder::createCone(const GeometryInfo& info, const StateInfo& sta
     vid->indexCount = static_cast<uint32_t>(indices->size());
     vid->instanceCount = instanceCount;
 
-    scenegraph->addChild(vid);
-
-    if (compileTraversal) compileTraversal->compile(scenegraph);
-
-    subgraph = scenegraph;
+    subgraph = decorateAndCompileIfRequired(info, stateInfo, vid);
     return subgraph;
 }
 
 ref_ptr<Node> Builder::createCylinder(const GeometryInfo& info, const StateInfo& stateInfo)
 {
-    auto& subgraph = _cylinders[info];
+    auto& subgraph = _cylinders[std::make_pair(info, stateInfo)];
     if (subgraph)
     {
         return subgraph;
     }
 
     uint32_t instanceCount = 1;
-    auto positions = info.positions;
-    if (positions)
-    {
-        if (positions->size() >= 1)
-            instanceCount = static_cast<uint32_t>(positions->size());
-        else
-            positions = {};
-    }
-
-    auto colors = info.colors;
-    if (colors && colors->valueCount() != instanceCount) colors = {};
-    if (!colors) colors = vec4Array::create(instanceCount, info.color);
-
+    auto positions = instancePositions(info, instanceCount);
+    auto colors = instanceColors(info, instanceCount);
     auto [t_origin, t_scale, t_top] = y_texcoord(stateInfo).value;
-
-    // create StateGroup as the root of the scene/command graph to hold the GraphicsProgram, and binding of Descriptors to decorate the whole graph
-    auto scenegraph = createStateGroup(stateInfo);
 
     auto dx = info.dx * 0.5f;
     auto dy = info.dy * 0.5f;
@@ -858,7 +883,7 @@ ref_ptr<Node> Builder::createCylinder(const GeometryInfo& info, const StateInfo&
         {
             unsigned int vi = c * 2;
             float r = float(c) / float(num_columns - 1);
-            float alpha = (r)*2.0f * PIf;
+            float alpha = (r) * 2.0f * PIf;
             v = dx * (-sinf(alpha)) + dy * (cosf(alpha));
             n = normalize(v);
 
@@ -938,7 +963,7 @@ ref_ptr<Node> Builder::createCylinder(const GeometryInfo& info, const StateInfo&
         {
             unsigned int vi = c * 2;
             float r = float(c) / float(num_columns - 1);
-            float alpha = (r)*2.0f * PIf;
+            float alpha = (r) * 2.0f * PIf;
             v = dx * (-sinf(alpha)) + dy * (cosf(alpha));
             n = normalize(v);
 
@@ -992,7 +1017,7 @@ ref_ptr<Node> Builder::createCylinder(const GeometryInfo& info, const StateInfo&
             for (unsigned int c = 1; c < num_columns - 1; ++c)
             {
                 float r = float(c) / float(num_columns - 1);
-                float alpha = (r)*2.0f * PIf;
+                float alpha = (r) * 2.0f * PIf;
                 v = dx * (-sinf(alpha)) + dy * (cosf(alpha));
                 n = normalize(v);
 
@@ -1043,40 +1068,22 @@ ref_ptr<Node> Builder::createCylinder(const GeometryInfo& info, const StateInfo&
     vid->indexCount = static_cast<uint32_t>(indices->size());
     vid->instanceCount = instanceCount;
 
-    scenegraph->addChild(vid);
-
-    if (compileTraversal) compileTraversal->compile(scenegraph);
-
-    subgraph = scenegraph;
+    subgraph = decorateAndCompileIfRequired(info, stateInfo, vid);
     return subgraph;
 }
 
 ref_ptr<Node> Builder::createDisk(const GeometryInfo& info, const StateInfo& stateInfo)
 {
-    auto& subgraph = _cylinders[info];
+    auto& subgraph = _disks[std::make_pair(info, stateInfo)];
     if (subgraph)
     {
         return subgraph;
     }
 
     uint32_t instanceCount = 1;
-    auto positions = info.positions;
-    if (positions)
-    {
-        if (positions->size() >= 1)
-            instanceCount = static_cast<uint32_t>(positions->size());
-        else
-            positions = {};
-    }
-
-    auto colors = info.colors;
-    if (colors && colors->valueCount() != instanceCount) colors = {};
-    if (!colors) colors = vec4Array::create(instanceCount, info.color);
-
+    auto positions = instancePositions(info, instanceCount);
+    auto colors = instanceColors(info, instanceCount);
     auto [t_origin, t_scale, t_top] = y_texcoord(stateInfo).value;
-
-    // create StateGroup as the root of the scene/command graph to hold the GraphicsProgram, and binding of Descriptors to decorate the whole graph
-    auto scenegraph = createStateGroup(stateInfo);
 
     auto dx = info.dx * 0.5f;
     auto dy = info.dy * 0.5f;
@@ -1099,7 +1106,7 @@ ref_ptr<Node> Builder::createDisk(const GeometryInfo& info, const StateInfo& sta
     for (unsigned int c = 1; c < num_vertices; ++c)
     {
         float r = float(c) / float(num_vertices - 1);
-        float alpha = (r)*2.0f * PIf;
+        float alpha = (r) * 2.0f * PIf;
         float sn = sinf(alpha);
         float cs = cosf(alpha);
         vec3 v = dy * cs - dx * sn;
@@ -1110,7 +1117,7 @@ ref_ptr<Node> Builder::createDisk(const GeometryInfo& info, const StateInfo& sta
 
     if (stateInfo.wireframe)
     {
-        unsigned int num_indices = (num_vertices)*2;
+        unsigned int num_indices = (num_vertices) * 2;
         indices = ushortArray::create(num_indices);
 
         unsigned int i = 0;
@@ -1157,37 +1164,21 @@ ref_ptr<Node> Builder::createDisk(const GeometryInfo& info, const StateInfo& sta
     vid->indexCount = static_cast<uint32_t>(indices->size());
     vid->instanceCount = instanceCount;
 
-    scenegraph->addChild(vid);
-
-    if (compileTraversal) compileTraversal->compile(scenegraph);
-
-    subgraph = scenegraph;
+    subgraph = decorateAndCompileIfRequired(info, stateInfo, vid);
     return subgraph;
 }
 
 ref_ptr<Node> Builder::createQuad(const GeometryInfo& info, const StateInfo& stateInfo)
 {
-    auto& subgraph = _boxes[info];
+    auto& subgraph = _quads[std::make_pair(info, stateInfo)];
     if (subgraph)
     {
         return subgraph;
     }
 
     uint32_t instanceCount = 1;
-    auto positions = info.positions;
-    if (positions)
-    {
-        if (positions->size() >= 1)
-            instanceCount = static_cast<uint32_t>(positions->size());
-        else
-            positions = {};
-    }
-
-    auto colors = info.colors;
-    if (colors && colors->valueCount() != instanceCount) colors = {};
-    if (!colors) colors = vec4Array::create(instanceCount, info.color);
-
-    auto scenegraph = createStateGroup(stateInfo);
+    auto positions = instancePositions(info, instanceCount);
+    auto colors = instanceColors(info, instanceCount);
 
     auto dx = info.dx;
     auto dy = info.dy;
@@ -1248,39 +1239,22 @@ ref_ptr<Node> Builder::createQuad(const GeometryInfo& info, const StateInfo& sta
     vid->indexCount = static_cast<uint32_t>(indices->size());
     vid->instanceCount = instanceCount;
 
-    scenegraph->addChild(vid);
-
-    if (compileTraversal) compileTraversal->compile(scenegraph);
-
-    return scenegraph;
+    subgraph = decorateAndCompileIfRequired(info, stateInfo, vid);
+    return subgraph;
 }
 
 ref_ptr<Node> Builder::createSphere(const GeometryInfo& info, const StateInfo& stateInfo)
 {
-    auto& subgraph = _spheres[info];
+    auto& subgraph = _spheres[std::make_pair(info, stateInfo)];
     if (subgraph)
     {
         return subgraph;
     }
 
-    auto [t_origin, t_scale, t_top] = y_texcoord(stateInfo).value;
-
     uint32_t instanceCount = 1;
-    auto positions = info.positions;
-    if (positions)
-    {
-        if (positions->size() >= 1)
-            instanceCount = static_cast<uint32_t>(positions->size());
-        else
-            positions = {};
-    }
-
-    auto colors = info.colors;
-    if (colors && colors->valueCount() != instanceCount) colors = {};
-    if (!colors) colors = vec4Array::create(instanceCount, info.color);
-
-    // create StateGroup as the root of the scene/command graph to hold the GraphicsProgram, and binding of Descriptors to decorate the whole graph
-    auto scenegraph = createStateGroup(stateInfo);
+    auto positions = instancePositions(info, instanceCount);
+    auto colors = instanceColors(info, instanceCount);
+    auto [t_origin, t_scale, t_top] = y_texcoord(stateInfo).value;
 
     auto dx = info.dx * 0.5f;
     auto dy = info.dy * 0.5f;
@@ -1367,40 +1341,22 @@ ref_ptr<Node> Builder::createSphere(const GeometryInfo& info, const StateInfo& s
     vid->indexCount = static_cast<uint32_t>(indices->size());
     vid->instanceCount = instanceCount;
 
-    scenegraph->addChild(vid);
-
-    if (compileTraversal) compileTraversal->compile(scenegraph);
-
-    subgraph = scenegraph;
+    subgraph = decorateAndCompileIfRequired(info, stateInfo, vid);
     return subgraph;
 }
 
 ref_ptr<Node> Builder::createHeightField(const GeometryInfo& info, const StateInfo& stateInfo)
 {
-    auto& subgraph = _heightfields[info];
+    auto& subgraph = _heightfields[std::make_pair(info, stateInfo)];
     if (subgraph)
     {
         return subgraph;
     }
 
-    auto [t_origin, t_scale, t_top] = y_texcoord(stateInfo).value;
-
     uint32_t instanceCount = 1;
-    auto positions = info.positions;
-    if (positions)
-    {
-        if (positions->size() >= 1)
-            instanceCount = static_cast<uint32_t>(positions->size());
-        else
-            positions = {};
-    }
-
-    auto colors = info.colors;
-    if (colors && colors->valueCount() != instanceCount) colors = {};
-    if (!colors) colors = vec4Array::create(instanceCount, info.color);
-
-    // create StateGroup as the root of the scene/command graph to hold the GraphicsProgram, and binding of Descriptors to decorate the whole graph
-    auto scenegraph = createStateGroup(stateInfo);
+    auto positions = instancePositions(info, instanceCount);
+    auto colors = instanceColors(info, instanceCount);
+    auto [t_origin, t_scale, t_top] = y_texcoord(stateInfo).value;
 
     auto dx = info.dx;
     auto dy = info.dy;
@@ -1511,10 +1467,6 @@ ref_ptr<Node> Builder::createHeightField(const GeometryInfo& info, const StateIn
     vid->indexCount = static_cast<uint32_t>(indices->size());
     vid->instanceCount = instanceCount;
 
-    scenegraph->addChild(vid);
-
-    if (compileTraversal) compileTraversal->compile(scenegraph);
-
-    subgraph = scenegraph;
+    subgraph = decorateAndCompileIfRequired(info, stateInfo, vid);
     return subgraph;
 }

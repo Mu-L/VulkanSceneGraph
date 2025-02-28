@@ -18,6 +18,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 #include <vsg/core/type_name.h>
 
 #include <vsg/maths/box.h>
+#include <vsg/maths/mat3.h>
 #include <vsg/maths/mat4.h>
 #include <vsg/maths/plane.h>
 #include <vsg/maths/quat.h>
@@ -39,9 +40,11 @@ namespace vsg
     class VSG_DECLSPEC Output
     {
     public:
-        Output(ref_ptr<const Options> in_options = {});
+        Output();
+        Output(ref_ptr<const Options> in_options);
 
-        Options& operator=(const Options& rhs) = delete;
+        Output(const Output& output) = delete;
+        Output& operator=(const Output& rhs) = delete;
 
         /// write property name if appropriate for format
         virtual void writePropertyName(const char* propertyName) = 0;
@@ -50,7 +53,7 @@ namespace vsg
         virtual void writeEndOfLine() = 0;
 
         /// write contiguous array of value(s)
-        virtual void write(size_t num, const int8_t* values) = 0;
+        virtual void write(size_t num, const int8_t* value) = 0;
         virtual void write(size_t num, const uint8_t* value) = 0;
         virtual void write(size_t num, const int16_t* value) = 0;
         virtual void write(size_t num, const uint16_t* value) = 0;
@@ -60,7 +63,9 @@ namespace vsg
         virtual void write(size_t num, const uint64_t* value) = 0;
         virtual void write(size_t num, const float* value) = 0;
         virtual void write(size_t num, const double* value) = 0;
+        virtual void write(size_t num, const long double* value) = 0;
         virtual void write(size_t num, const std::string* value) = 0;
+        virtual void write(size_t num, const std::wstring* value) = 0;
         virtual void write(size_t num, const Path* value) = 0;
 
         /// write object
@@ -77,6 +82,9 @@ namespace vsg
         void write(size_t num, const dvec2* value) { write(num * value->size(), value->data()); }
         void write(size_t num, const dvec3* value) { write(num * value->size(), value->data()); }
         void write(size_t num, const dvec4* value) { write(num * value->size(), value->data()); }
+        void write(size_t num, const ldvec2* value) { write(num * value->size(), value->data()); }
+        void write(size_t num, const ldvec3* value) { write(num * value->size(), value->data()); }
+        void write(size_t num, const ldvec4* value) { write(num * value->size(), value->data()); }
         void write(size_t num, const bvec2* value) { write(num * value->size(), value->data()); }
         void write(size_t num, const bvec3* value) { write(num * value->size(), value->data()); }
         void write(size_t num, const bvec4* value) { write(num * value->size(), value->data()); }
@@ -97,6 +105,8 @@ namespace vsg
         void write(size_t num, const uivec4* value) { write(num * value->size(), value->data()); }
         void write(size_t num, const quat* value) { write(num * value->size(), value->data()); }
         void write(size_t num, const dquat* value) { write(num * value->size(), value->data()); }
+        void write(size_t num, const mat3* value) { write(num * value->size(), value->data()); }
+        void write(size_t num, const dmat3* value) { write(num * value->size(), value->data()); }
         void write(size_t num, const mat4* value) { write(num * value->size(), value->data()); }
         void write(size_t num, const dmat4* value) { write(num * value->size(), value->data()); }
         void write(size_t num, const sphere* value) { write(num * value->size(), value->data()); }
@@ -159,7 +169,7 @@ namespace vsg
             uint32_t numElements = static_cast<uint32_t>(values.size());
             write(propertyName, numElements);
 
-            for (auto& v : values)
+            for (const auto& v : values)
             {
                 write("element", v);
             }
@@ -183,7 +193,7 @@ namespace vsg
             write(object);
         }
 
-        /// write a value casting it specified type i.e. output.write<uint32_t>("Value", value);
+        /// write a value casting it to specified type i.e. output.write<uint32_t>("Value", value);
         template<typename W, typename T>
         void writeValue(const char* propertyName, T value)
         {

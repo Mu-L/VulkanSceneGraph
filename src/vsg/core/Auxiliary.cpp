@@ -11,9 +11,9 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 </editor-fold> */
 
 #include <vsg/core/Auxiliary.h>
+#include <vsg/core/compare.h>
 #include <vsg/io/Input.h>
 #include <vsg/io/Logger.h>
-#include <vsg/io/Options.h>
 #include <vsg/io/Output.h>
 
 using namespace vsg;
@@ -62,7 +62,7 @@ bool Auxiliary::signalConnectedObjectToBeDeleted()
     }
 
     // disconnect this Auxiliary object from the ConnectedObject
-    _connectedObject = 0;
+    _connectedObject = nullptr;
 
     // return true, the object should be deleted
     return true;
@@ -72,29 +72,32 @@ void Auxiliary::resetConnectedObject()
 {
     std::scoped_lock<std::mutex> guard(_mutex);
 
-    _connectedObject = 0;
+    _connectedObject = nullptr;
 }
 
-void Auxiliary::setObject(const std::string& key, Object* object)
+int Auxiliary::compare(const Auxiliary& rhs) const
 {
-    userObjects[key] = object;
-    //debug("Auxiliary::setObject( [", key, "] = ", object, ", ", userObjects.size());
-}
+    auto lhs_itr = userObjects.begin();
+    auto rhs_itr = rhs.userObjects.begin();
+    while (lhs_itr != userObjects.end() && rhs_itr != rhs.userObjects.end())
+    {
+        if (lhs_itr->first < rhs_itr->first) return -1;
+        if (lhs_itr->first > rhs_itr->first) return 1;
+        if (int result = vsg::compare_pointer(lhs_itr->second, rhs_itr->second); result != 0) return result;
+        ++lhs_itr;
+        ++rhs_itr;
+    }
 
-Object* Auxiliary::getObject(const std::string& key)
-{
-    //debug("Auxiliary::getObject( [", key, "])");
-    if (auto itr = userObjects.find(key); itr != userObjects.end())
-        return itr->second.get();
+    // only can get here if either lhs_itr == userObjects.end() || rhs_itr == rhs.userObjects.end()
+    if (lhs_itr == userObjects.end())
+    {
+        if (rhs_itr != rhs.userObjects.end())
+            return -1;
+        else
+            return 0;
+    }
     else
-        return nullptr;
-}
-
-const Object* Auxiliary::getObject(const std::string& key) const
-{
-    //debug("Auxiliary::getObject( [", key, "]) const");
-    if (auto itr = userObjects.find(key); itr != userObjects.end())
-        return itr->second.get();
-    else
-        return nullptr;
+    {
+        return 1;
+    }
 }

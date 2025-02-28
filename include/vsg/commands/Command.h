@@ -12,21 +12,19 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
 </editor-fold> */
 
-#include <vsg/nodes/Node.h>
-#include <vsg/vk/vulkan.h>
+#include <vsg/nodes/Compilable.h>
 
 namespace vsg
 {
     class CommandBuffer;
-    class Context;
 
-    /// Command base class from encapsualting vkCmd* calls and associated settings.
-    class VSG_DECLSPEC Command : public Inherit<Node, Command>
+    /// Command base class for encapsulating vkCmd* calls and associated settings.
+    class VSG_DECLSPEC Command : public Inherit<Compilable, Command>
     {
     public:
         Command() {}
-
-        virtual void compile(Context& /*context*/) {}
+        Command(const Command& rhs, const CopyOp& copyop = {}) :
+            Inherit(rhs, copyop) {}
 
         virtual void record(CommandBuffer& commandBuffer) const = 0;
     };

@@ -11,7 +11,6 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 </editor-fold> */
 
 #include <vsg/core/compare.h>
-#include <vsg/io/Options.h>
 #include <vsg/state/DepthStencilState.h>
 #include <vsg/vk/Context.h>
 
@@ -41,16 +40,16 @@ DepthStencilState::~DepthStencilState()
 
 int DepthStencilState::compare(const Object& rhs_object) const
 {
-    int result = Object::compare(rhs_object);
+    int result = GraphicsPipelineState::compare(rhs_object);
     if (result != 0) return result;
 
-    auto& rhs = static_cast<decltype(*this)>(rhs_object);
+    const auto& rhs = static_cast<decltype(*this)>(rhs_object);
     return compare_region(depthTestEnable, maxDepthBounds, rhs.depthTestEnable);
 }
 
 void DepthStencilState::read(Input& input)
 {
-    Object::read(input);
+    GraphicsPipelineState::read(input);
 
     input.readValue<uint32_t>("depthTestEnable", depthTestEnable);
     input.readValue<uint32_t>("depthWriteEnable", depthWriteEnable);
@@ -80,7 +79,7 @@ void DepthStencilState::read(Input& input)
 
 void DepthStencilState::write(Output& output) const
 {
-    Object::write(output);
+    GraphicsPipelineState::write(output);
 
     output.writeValue<uint32_t>("depthTestEnable", depthTestEnable);
     output.writeValue<uint32_t>("depthWriteEnable", depthWriteEnable);

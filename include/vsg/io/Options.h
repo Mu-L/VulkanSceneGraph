@@ -16,6 +16,8 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 #include <vsg/core/observer_ptr.h>
 #include <vsg/io/FileSystem.h>
 #include <vsg/maths/transform.h>
+#include <vsg/state/StateCommand.h>
+#include <vsg/utils/Instrumentation.h>
 
 namespace vsg
 {
@@ -25,6 +27,8 @@ namespace vsg
     class OperationThreads;
     class CommandLine;
     class ShaderSet;
+    class FindDynamicObjects;
+    class PropagateDynamicObjects;
 
     using ReaderWriters = std::vector<ref_ptr<ReaderWriter>>;
 
@@ -33,7 +37,7 @@ namespace vsg
     {
     public:
         Options();
-        explicit Options(const Options& options);
+        Options(const Options& rhs, const CopyOp& copyop = {});
 
         template<typename... Args>
         explicit Options(Args... args)
@@ -46,9 +50,6 @@ namespace vsg
         /// read command line options, assign values to this options object to later use with reading/writing files
         virtual bool readOptions(CommandLine& arguments);
 
-        void read(Input& input) override;
-        void write(Output& output) const override;
-
         void add(ref_ptr<ReaderWriter> rw = {});
         void add(const ReaderWriters& rws);
 
@@ -59,8 +60,8 @@ namespace vsg
         /// Hint to use when searching for Paths with vsg::findFile(filename, options);
         enum FindFileHint
         {
-            CHECK_ORIGINAL_FILENAME_EXISTS_FIRST, /// check the filename exists with it's original path before trying to find it in Options::paths.
-            CHECK_ORIGINAL_FILENAME_EXISTS_LAST,  /// check the filename exists with it's original path after failing to find it in Options::paths.
+            CHECK_ORIGINAL_FILENAME_EXISTS_FIRST, /// check the filename exists with its original path before trying to find it in Options::paths.
+            CHECK_ORIGINAL_FILENAME_EXISTS_LAST,  /// check the filename exists with its original path after failing to find it in Options::paths.
             ONLY_CHECK_PATHS                      /// only check the filename exists in the Options::paths
         };
         FindFileHint checkFilenameHint = CHECK_ORIGINAL_FILENAME_EXISTS_FIRST;
@@ -81,13 +82,33 @@ namespace vsg
         /// Coordinate convention to assume for specified lower case file formats extensions
         std::map<Path, CoordinateConvention> formatCoordinateConventions;
 
-        /// User defined ShaderSet map, loaders should check the available ShaderSet used the name of the type ShaderSet.
+        /// User defined ShaderSet map, loaders should check the available ShaderSet using the name of the type of ShaderSet.
         /// Standard names are :
         ///     "pbr" will substitute for vsg::createPhysicsBasedRenderingShaderSet()
         ///     "phong" will substitute for vsg::createPhongShaderSet()
         ///     "flat" will substitute for vsg::createFlatShadedShaderSet()
         ///     "text" will substitute for vsg::createTextShaderSet()
         std::map<std::string, ref_ptr<ShaderSet>> shaderSets;
+
+        /// specification of any StateCommands that will be provided the parents of any newly created subgraphs
+        /// scene graph creation routines can use the inherited state information to avoid setting state in the local subgraph.
+        StateCommands inheritedState;
+
+        /// Hook for assigning Instrumentation to enable profiling of record traversal.
+        ref_ptr<Instrumentation> instrumentation;
+
+        /// mechanism for finding dynamic objects in loaded scene graph
+        ref_ptr<FindDynamicObjects> findDynamicObjects;
+
+        /// mechanism for propogating dynamic objects classification up parental chain so that cloning is done on all dynamic objects to avoid sharing of dyanmic parts.
+        ref_ptr<PropagateDynamicObjects> propagateDynamicObjects;
+
+    public:
+        ref_ptr<Object> clone(const CopyOp& copyop = {}) const override { return Options::create(*this, copyop); }
+        int compare(const Object& rhs) const override;
+
+        void read(Input& input) override;
+        void write(Output& output) const override;
 
     protected:
         virtual ~Options();
@@ -96,5 +117,20 @@ namespace vsg
 
     /// convenience function that if a filename has a path, it duplicates the supplied Options object and prepends the path to the new Options::paths, otherwise returns the original Options object.
     extern VSG_DECLSPEC ref_ptr<const vsg::Options> prependPathToOptionsIfRequired(const vsg::Path& filename, ref_ptr<const vsg::Options> options);
+
+    /// return true if the options->extensionHint or filename extension are found in the list of arguments/containers
+    template<typename... Args>
+    bool compatibleExtension(const vsg::Path& filename, const vsg::Options* options, const Args&... args)
+    {
+        if (options && options->extensionHint && contains(options->extensionHint, args...)) return true;
+        return contains(vsg::lowerCaseFileExtension(filename), args...);
+    }
+
+    /// return true if the options->extensionHint is found in the list of arguments/containers
+    template<typename... Args>
+    bool compatibleExtension(const vsg::Options* options, const Args&... args)
+    {
+        return options && options->extensionHint && contains(options->extensionHint, args...);
+    }
 
 } // namespace vsg

@@ -12,9 +12,10 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
 #include <vsg/commands/BindIndexBuffer.h>
 #include <vsg/commands/BindVertexBuffers.h>
-#include <vsg/io/Options.h>
 #include <vsg/maths/sample.h>
+#include <vsg/maths/transform.h>
 #include <vsg/nodes/Geometry.h>
+#include <vsg/nodes/VertexDraw.h>
 #include <vsg/nodes/VertexIndexDraw.h>
 #include <vsg/state/ArrayState.h>
 #include <vsg/state/BindDescriptorSet.h>
@@ -29,6 +30,19 @@ using namespace vsg;
 //
 // ArrayState
 //
+ArrayState::ArrayState(const ArrayState& rhs, const CopyOp& copyop) :
+    Inherit(rhs, copyop),
+    localToWorldStack(rhs.localToWorldStack),
+    worldToLocalStack(rhs.worldToLocalStack),
+    topology(rhs.topology),
+    vertex_attribute_location(rhs.vertex_attribute_location),
+    vertexAttribute(rhs.vertexAttribute),
+    vertices(rhs.vertices),
+    proxy_vertices(rhs.proxy_vertices),
+    arrays(rhs.arrays)
+{
+}
+
 ref_ptr<const vec3Array> ArrayState::vertexArray(uint32_t /*instanceIndex*/)
 {
     return vertices;
@@ -44,11 +58,11 @@ void ArrayState::apply(const vsg::BindGraphicsPipeline& bpg)
 
 bool ArrayState::getAttributeDetails(const VertexInputState& vas, uint32_t location, AttributeDetails& attributeDetails)
 {
-    for (auto& attribute : vas.vertexAttributeDescriptions)
+    for (const auto& attribute : vas.vertexAttributeDescriptions)
     {
         if (attribute.location == location)
         {
-            for (auto& binding : vas.vertexBindingDescriptions)
+            for (const auto& binding : vas.vertexBindingDescriptions)
             {
                 if (attribute.binding == binding.binding)
                 {
@@ -80,6 +94,11 @@ void ArrayState::apply(const vsg::Geometry& geometry)
     applyArrays(geometry.firstBinding, geometry.arrays);
 }
 
+void ArrayState::apply(const vsg::VertexDraw& vid)
+{
+    applyArrays(vid.firstBinding, vid.arrays);
+}
+
 void ArrayState::apply(const vsg::VertexIndexDraw& vid)
 {
     applyArrays(vid.firstBinding, vid.arrays);
@@ -96,7 +115,7 @@ void ArrayState::applyArrays(uint32_t firstBinding, const DataList& in_arrays)
     std::copy(in_arrays.begin(), in_arrays.end(), arrays.begin() + firstBinding);
 
     // if the required vertexAttribute is within the new arrays apply the appropriate array to set up the vertices array
-    if ((vertexAttribute.binding >= firstBinding) && ((vertexAttribute.binding - firstBinding) < arrays.size()))
+    if ((vertexAttribute.binding >= firstBinding) && ((vertexAttribute.binding - firstBinding) < arrays.size()) && arrays[vertexAttribute.binding])
     {
         arrays[vertexAttribute.binding]->accept(*this);
     }
@@ -111,7 +130,7 @@ void ArrayState::applyArrays(uint32_t firstBinding, const BufferInfoList& in_arr
     }
 
     // if the required vertexAttribute is within the new arrays apply the appropriate array to set up the vertices array
-    if ((vertexAttribute.binding >= firstBinding) && ((vertexAttribute.binding - firstBinding) < arrays.size()))
+    if ((vertexAttribute.binding >= firstBinding) && ((vertexAttribute.binding - firstBinding) < arrays.size()) && arrays[vertexAttribute.binding])
     {
         arrays[vertexAttribute.binding]->accept(*this);
     }
@@ -160,13 +179,13 @@ NullArrayState::NullArrayState(const ArrayState& as) :
     vertices = {};
 }
 
-ref_ptr<ArrayState> NullArrayState::clone()
+ref_ptr<ArrayState> NullArrayState::cloneArrayState()
 {
     return NullArrayState::create(*this);
 }
 
 // clone the specified ArrayState
-ref_ptr<ArrayState> NullArrayState::clone(ref_ptr<ArrayState> arrayState)
+ref_ptr<ArrayState> NullArrayState::cloneArrayState(ref_ptr<ArrayState> arrayState)
 {
     return NullArrayState::create(*arrayState);
 }
@@ -201,12 +220,12 @@ PositionArrayState::PositionArrayState(const ArrayState& rhs) :
 {
 }
 
-ref_ptr<ArrayState> PositionArrayState::clone()
+ref_ptr<ArrayState> PositionArrayState::cloneArrayState()
 {
     return PositionArrayState::create(*this);
 }
 
-ref_ptr<ArrayState> PositionArrayState::clone(ref_ptr<ArrayState> arrayState)
+ref_ptr<ArrayState> PositionArrayState::cloneArrayState(ref_ptr<ArrayState> arrayState)
 {
     return PositionArrayState::create(*arrayState);
 }
@@ -254,21 +273,21 @@ DisplacementMapArrayState::DisplacementMapArrayState(const ArrayState& rhs) :
 {
 }
 
-ref_ptr<ArrayState> DisplacementMapArrayState::clone()
+ref_ptr<ArrayState> DisplacementMapArrayState::cloneArrayState()
 {
     return DisplacementMapArrayState::create(*this);
 }
 
-ref_ptr<ArrayState> DisplacementMapArrayState::clone(ref_ptr<ArrayState> arrayState)
+ref_ptr<ArrayState> DisplacementMapArrayState::cloneArrayState(ref_ptr<ArrayState> arrayState)
 {
     return DisplacementMapArrayState::create(*arrayState);
 }
 
 void DisplacementMapArrayState::apply(const DescriptorImage& di)
 {
-    if (di.imageInfoList.size() >= 1)
+    if (!di.imageInfoList.empty())
     {
-        auto& imageInfo = *di.imageInfoList[0];
+        const auto& imageInfo = *di.imageInfoList[0];
         if (imageInfo.imageView && imageInfo.imageView->image)
         {
             displacementMap = imageInfo.imageView->image->data.cast<floatArray2D>();
@@ -323,7 +342,7 @@ ref_ptr<const vec3Array> DisplacementMapArrayState::vertexArray(uint32_t /*insta
 
         auto new_vertices = vsg::vec3Array::create(static_cast<uint32_t>(vertices->size()));
         auto src_vertex_itr = vertices->begin();
-        auto src_teccoord_itr = texcoords->begin();
+        auto src_texcoord_itr = texcoords->begin();
         auto src_normal_itr = normals->begin();
         // vec2 tc_scale(static_cast<float>(displacementMap->width()) - 1.0f, static_cast<float>(displacementMap->height()) - 1.0f);
 
@@ -332,8 +351,8 @@ ref_ptr<const vec3Array> DisplacementMapArrayState::vertexArray(uint32_t /*insta
 
         for (auto& v : *new_vertices)
         {
-            auto& tc = *(src_teccoord_itr++);
-            auto& n = *(src_normal_itr++);
+            const auto& tc = *(src_texcoord_itr++);
+            const auto& n = *(src_normal_itr++);
             float d = sample(*sampler, *displacementMap, tc);
             v = *(src_vertex_itr++) + n * d;
         }
@@ -361,12 +380,12 @@ PositionAndDisplacementMapArrayState::PositionAndDisplacementMapArrayState(const
 {
 }
 
-ref_ptr<ArrayState> PositionAndDisplacementMapArrayState::clone()
+ref_ptr<ArrayState> PositionAndDisplacementMapArrayState::cloneArrayState()
 {
     return PositionAndDisplacementMapArrayState::create(*this);
 }
 
-ref_ptr<ArrayState> PositionAndDisplacementMapArrayState::clone(ref_ptr<ArrayState> arrayState)
+ref_ptr<ArrayState> PositionAndDisplacementMapArrayState::cloneArrayState(ref_ptr<ArrayState> arrayState)
 {
     return PositionAndDisplacementMapArrayState::create(*arrayState);
 }
@@ -407,8 +426,8 @@ ref_ptr<const vec3Array> PositionAndDisplacementMapArrayState::vertexArray(uint3
 
         for (auto& v : *new_vertices)
         {
-            auto& tc = *(src_teccoord_itr++);
-            auto& n = *(src_normal_itr++);
+            const auto& tc = *(src_teccoord_itr++);
+            const auto& n = *(src_normal_itr++);
             float d = sample(*sampler, *displacementMap, tc);
             v = *(src_vertex_itr++) + n * d + position;
         }
@@ -416,4 +435,82 @@ ref_ptr<const vec3Array> PositionAndDisplacementMapArrayState::vertexArray(uint3
     }
 
     return vertices;
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+//
+// BillboardArrayState
+//
+BillboardArrayState::BillboardArrayState()
+{
+}
+
+BillboardArrayState::BillboardArrayState(const BillboardArrayState& rhs) :
+    Inherit(rhs),
+    position_attribute_location(rhs.position_attribute_location),
+    positionAttribute(rhs.positionAttribute)
+{
+}
+
+BillboardArrayState::BillboardArrayState(const ArrayState& rhs) :
+    Inherit(rhs)
+{
+}
+
+ref_ptr<ArrayState> BillboardArrayState::cloneArrayState()
+{
+    return BillboardArrayState::create(*this);
+}
+
+ref_ptr<ArrayState> BillboardArrayState::cloneArrayState(ref_ptr<ArrayState> arrayState)
+{
+    return BillboardArrayState::create(*arrayState);
+}
+
+void BillboardArrayState::apply(const VertexInputState& vas)
+{
+    getAttributeDetails(vas, vertex_attribute_location, vertexAttribute);
+    getAttributeDetails(vas, position_attribute_location, positionAttribute);
+}
+
+ref_ptr<const vec3Array> BillboardArrayState::vertexArray(uint32_t instanceIndex)
+{
+    struct GetValue : public ConstVisitor
+    {
+        explicit GetValue(uint32_t i) :
+            index(i) {}
+        uint32_t index;
+        vec4 value;
+
+        void apply(const vec4Value& data) override { value = data.value(); }
+        void apply(const vec4Array& data) override { value = data[index]; }
+    } gv(instanceIndex);
+
+    // get the position_distanceScale value
+    arrays[positionAttribute.binding]->accept(gv);
+    dvec3 position(gv.value.xyz);
+    double autoDistanceScale = gv.value.w;
+
+    dmat4 billboard_to_local;
+    if (!localToWorldStack.empty() && !worldToLocalStack.empty())
+    {
+        const auto& mv = localToWorldStack.back();
+        const auto& inverse_mv = worldToLocalStack.back();
+        auto center_eye = mv * position;
+        auto billboard_mv = computeBillboardMatrix(center_eye, autoDistanceScale);
+        billboard_to_local = inverse_mv * billboard_mv;
+    }
+    else
+    {
+        billboard_to_local = vsg::translate(position);
+    }
+
+    auto new_vertices = vsg::vec3Array::create(static_cast<uint32_t>(vertices->size()));
+    auto src_vertex_itr = vertices->begin();
+    for (auto& v : *new_vertices)
+    {
+        const auto& sv = *(src_vertex_itr++);
+        v = vec3(billboard_to_local * dvec3(sv));
+    }
+    return new_vertices;
 }

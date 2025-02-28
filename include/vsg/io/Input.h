@@ -17,6 +17,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 #include <vsg/core/Version.h>
 
 #include <vsg/maths/box.h>
+#include <vsg/maths/mat3.h>
 #include <vsg/maths/mat4.h>
 #include <vsg/maths/plane.h>
 #include <vsg/maths/quat.h>
@@ -37,14 +38,15 @@ namespace vsg
     // forward declare
     class Options;
 
-    /// Base class that provides a means of read a range of data types to an input stream.
+    /// Base class that provides a means of reading a range of data types from an input stream.
     /// Used by vsg::Object::read(Input&) implementations across the VSG to provide native serialization from binary/ascii files
     class VSG_DECLSPEC Input
     {
     public:
         Input(ref_ptr<ObjectFactory> in_objectFactory, ref_ptr<const Options> in_options = {});
 
-        Options& operator=(const Options& rhs) = delete;
+        Input(const Input& output) = delete;
+        Input& operator=(const Input& rhs) = delete;
 
         /// return true if property name matches the next token in the stream, or if property names are not required for format
         virtual bool matchPropertyName(const char* propertyName) = 0;
@@ -60,7 +62,9 @@ namespace vsg
         virtual void read(size_t num, uint64_t* value) = 0;
         virtual void read(size_t num, float* value) = 0;
         virtual void read(size_t num, double* value) = 0;
+        virtual void read(size_t num, long double* value) = 0;
         virtual void read(size_t num, std::string* value) = 0;
+        virtual void read(size_t num, std::wstring* value) = 0;
         virtual void read(size_t num, Path* value) = 0;
 
         // read object
@@ -76,6 +80,9 @@ namespace vsg
         void read(size_t num, vec4* value) { read(num * value->size(), value->data()); }
         void read(size_t num, dvec2* value) { read(num * value->size(), value->data()); }
         void read(size_t num, dvec3* value) { read(num * value->size(), value->data()); }
+        void read(size_t num, ldvec4* value) { read(num * value->size(), value->data()); }
+        void read(size_t num, ldvec2* value) { read(num * value->size(), value->data()); }
+        void read(size_t num, ldvec3* value) { read(num * value->size(), value->data()); }
         void read(size_t num, dvec4* value) { read(num * value->size(), value->data()); }
         void read(size_t num, bvec2* value) { read(num * value->size(), value->data()); }
         void read(size_t num, bvec3* value) { read(num * value->size(), value->data()); }
@@ -97,6 +104,8 @@ namespace vsg
         void read(size_t num, uivec4* value) { read(num * value->size(), value->data()); }
         void read(size_t num, quat* value) { read(num * value->size(), value->data()); }
         void read(size_t num, dquat* value) { read(num * value->size(), value->data()); }
+        void read(size_t num, mat3* value) { read(num * value->size(), value->data()); }
+        void read(size_t num, dmat3* value) { read(num * value->size(), value->data()); }
         void read(size_t num, mat4* value) { read(num * value->size(), value->data()); }
         void read(size_t num, dmat4* value) { read(num * value->size(), value->data()); }
         void read(size_t num, sphere* value) { read(num * value->size(), value->data()); }
@@ -106,7 +115,7 @@ namespace vsg
         void read(size_t num, plane* value) { read(num * value->size(), value->data()); }
         void read(size_t num, dplane* value) { read(num * value->size(), value->data()); }
 
-        /// treat non standard type as raw data,
+        /// treat non standard type as raw data
         template<typename T>
         void read(size_t num, T* value)
         {
@@ -222,7 +231,7 @@ namespace vsg
             return v;
         }
 
-        /// read a value as a type, then cast it another type
+        /// read a value as a type, then cast it to another type
         template<typename W, typename T>
         void readValue(const char* propertyName, T& value)
         {

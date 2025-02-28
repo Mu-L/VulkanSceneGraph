@@ -16,16 +16,17 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 #include <vsg/commands/PipelineBarrier.h>
 #include <vsg/core/Version.h>
 #include <vsg/io/Logger.h>
-#include <vsg/io/Options.h>
 #include <vsg/nodes/Geometry.h>
 #include <vsg/nodes/Group.h>
 #include <vsg/nodes/LOD.h>
 #include <vsg/nodes/QuadGroup.h>
 #include <vsg/nodes/StateGroup.h>
 #include <vsg/state/DescriptorSet.h>
+#include <vsg/state/DynamicState.h>
+#include <vsg/ui/UIEvent.h>
 #include <vsg/vk/CommandBuffer.h>
 #include <vsg/vk/Context.h>
-#include <vsg/vk/Extensions.h>
+#include <vsg/vk/DescriptorPools.h>
 #include <vsg/vk/RenderPass.h>
 #include <vsg/vk/State.h>
 
@@ -86,18 +87,51 @@ void BuildAccelerationStructureCommand::setScratchBuffer(ref_ptr<Buffer> scratch
 //
 // vsg::Context
 //
-Context::Context(Device* in_device, const ResourceRequirements& resourceRequirements) :
+Context::Context(Device* in_device, const ResourceRequirements& in_resourceRequirements) :
     deviceID(in_device->deviceID),
     device(in_device),
-    deviceMemoryBufferPools(MemoryBufferPools::create("Device_MemoryBufferPool", device, resourceRequirements)),
-    stagingMemoryBufferPools(MemoryBufferPools::create("Staging_MemoryBufferPool", device, resourceRequirements)),
+    resourceRequirements(in_resourceRequirements),
     scratchBufferSize(0)
 {
     //semaphore = vsg::Semaphore::create(device);
     scratchMemory = ScratchMemory::create(4096);
 
-    minimum_maxSets = resourceRequirements.computeNumDescriptorSets();
-    minimum_descriptorPoolSizes = resourceRequirements.computeDescriptorPoolSizes();
+    vsg::debug("Context::Context() ", this);
+
+    deviceMemoryBufferPools = device->deviceMemoryBufferPools.ref_ptr();
+    if (!deviceMemoryBufferPools)
+    {
+        device->deviceMemoryBufferPools = deviceMemoryBufferPools = MemoryBufferPools::create("Device_MemoryBufferPool", device, in_resourceRequirements);
+        vsg::debug("Context::Context() creating new deviceMemoryBufferPools = ", deviceMemoryBufferPools);
+    }
+    else
+    {
+        vsg::debug("Context::Context() reusing deviceMemoryBufferPools = ", deviceMemoryBufferPools);
+    }
+
+    stagingMemoryBufferPools = device->stagingMemoryBufferPools.ref_ptr();
+    if (!stagingMemoryBufferPools)
+    {
+        device->stagingMemoryBufferPools = stagingMemoryBufferPools = MemoryBufferPools::create("Staging_MemoryBufferPool", device, in_resourceRequirements);
+        vsg::debug("Context::Context() creating new stagingMemoryBufferPools = ", stagingMemoryBufferPools);
+    }
+    else
+    {
+        vsg::debug("Context::Context() reusing stagingMemoryBufferPools = ", stagingMemoryBufferPools);
+    }
+
+    descriptorPools = device->descriptorPools.ref_ptr();
+    if (!descriptorPools)
+    {
+        device->descriptorPools = descriptorPools = DescriptorPools::create(device);
+        vsg::debug("Context::Context() creating new descriptorPools = ", descriptorPools);
+    }
+    else
+    {
+        vsg::debug("Context::Context() reusing descriptorPools = ", descriptorPools);
+    }
+
+    defaultPipelineStates.push_back(DynamicState::create());
 }
 
 Context::Context(const Context& context) :
@@ -106,9 +140,8 @@ Context::Context(const Context& context) :
     device(context.device),
     view(context.view),
     viewID(context.viewID),
+    mask(context.mask),
     viewDependentState(context.viewDependentState),
-    minimum_maxSets(context.minimum_maxSets),
-    minimum_descriptorPoolSizes(context.minimum_descriptorPoolSizes),
     renderPass(context.renderPass),
     defaultPipelineStates(context.defaultPipelineStates),
     overridePipelineStates(context.overridePipelineStates),
@@ -124,7 +157,10 @@ Context::Context(const Context& context) :
 
 Context::~Context()
 {
-    waitForCompletion();
+    if (requiresWaitForCompletion)
+    {
+        waitForCompletion();
+    }
 }
 
 ref_ptr<CommandBuffer> Context::getOrCreateCommandBuffer()
@@ -154,96 +190,29 @@ ShaderCompiler* Context::getOrCreateShaderCompiler()
     return shaderCompiler;
 }
 
-void Context::getDescriptorPoolSizesToUse(uint32_t& maxSets, DescriptorPoolSizes& descriptorPoolSizes)
+void Context::reserve(const ResourceRequirements& requirements)
 {
-    if (minimum_maxSets > maxSets)
+    CPU_INSTRUMENTATION_L2_NC(instrumentation, "Context reserve", COLOR_COMPILE)
+
+    if (requirements.maxSlot > resourceRequirements.maxSlot)
     {
-        maxSets = minimum_maxSets;
+        resourceRequirements.maxSlot = requirements.maxSlot;
     }
 
-    for (auto& [minimum_type, minimum_descriptorCount] : minimum_descriptorPoolSizes)
-    {
-        auto itr = descriptorPoolSizes.begin();
-        for (; itr != descriptorPoolSizes.end(); ++itr)
-        {
-            if (itr->type == minimum_type && minimum_descriptorCount > itr->descriptorCount)
-            {
-                itr->descriptorCount = minimum_descriptorCount;
-                break;
-            }
-        }
-        if (itr == descriptorPoolSizes.end())
-        {
-            descriptorPoolSizes.push_back(VkDescriptorPoolSize{minimum_type, minimum_descriptorCount});
-        }
-    }
+    descriptorPools->reserve(requirements);
 }
 
 ref_ptr<DescriptorSet::Implementation> Context::allocateDescriptorSet(DescriptorSetLayout* descriptorSetLayout)
 {
-    for (auto itr = descriptorPools.rbegin(); itr != descriptorPools.rend(); ++itr)
-    {
-        auto dsi = (*itr)->allocateDescriptorSet(descriptorSetLayout);
-        if (dsi) return dsi;
-    }
-
-    DescriptorPoolSizes descriptorPoolSizes;
-    descriptorSetLayout->getDescriptorPoolSizes(descriptorPoolSizes);
-
-    uint32_t maxSets = 1;
-    getDescriptorPoolSizesToUse(maxSets, descriptorPoolSizes);
-
-    auto descriptorPool = vsg::DescriptorPool::create(device, maxSets, descriptorPoolSizes);
-    auto dsi = descriptorPool->allocateDescriptorSet(descriptorSetLayout);
-
-    descriptorPools.push_back(descriptorPool);
-    return dsi;
-}
-
-void Context::reserve(const ResourceRequirements& requirements)
-{
-    auto maxSets = requirements.computeNumDescriptorSets();
-    auto descriptorPoolSizes = requirements.computeDescriptorPoolSizes();
-
-    uint32_t available_maxSets = 0;
-    DescriptorPoolSizes available_descriptorPoolSizes;
-    for (auto& descriptorPool : descriptorPools)
-    {
-        descriptorPool->getAvailablity(available_maxSets, available_descriptorPoolSizes);
-    }
-
-    auto required_maxSets = maxSets;
-    auto required_descriptorPoolSizes = descriptorPoolSizes;
-
-    if (available_maxSets < required_maxSets)
-        required_maxSets -= available_maxSets;
-    else
-        required_maxSets = 0;
-
-    for (auto& [type, descriptorCount] : required_descriptorPoolSizes)
-    {
-        for (auto itr = available_descriptorPoolSizes.begin(); itr != available_descriptorPoolSizes.end(); ++itr)
-        {
-            if (itr->type == type)
-            {
-                if (itr->descriptorCount < descriptorCount)
-                    descriptorCount -= itr->descriptorCount;
-                else
-                    descriptorCount = 0;
-                break;
-            }
-        }
-    }
-
-    if (required_maxSets > 0)
-    {
-        getDescriptorPoolSizesToUse(required_maxSets, required_descriptorPoolSizes);
-        descriptorPools.push_back(vsg::DescriptorPool::create(device, required_maxSets, required_descriptorPoolSizes));
-    }
+    return descriptorPools->allocateDescriptorSet(descriptorSetLayout);
 }
 
 void Context::copy(ref_ptr<Data> data, ref_ptr<ImageInfo> dest)
 {
+    CPU_INSTRUMENTATION_L2_NC(instrumentation, "Context copy", COLOR_COMPILE)
+
+    // info("Context::copy(", data, ", ", dest, ") ", this, ", ", transferTask);
+
     if (!copyImageCmd)
     {
         copyImageCmd = CopyAndReleaseImage::create(stagingMemoryBufferPools);
@@ -255,6 +224,10 @@ void Context::copy(ref_ptr<Data> data, ref_ptr<ImageInfo> dest)
 
 void Context::copy(ref_ptr<Data> data, ref_ptr<ImageInfo> dest, uint32_t numMipMapLevels)
 {
+    CPU_INSTRUMENTATION_L2_NC(instrumentation, "Context copy", COLOR_COMPILE)
+
+    // info("Context::copy(", data, ", ", dest, ") ", this, ", ", transferTask);
+
     if (!copyImageCmd)
     {
         copyImageCmd = CopyAndReleaseImage::create(stagingMemoryBufferPools);
@@ -266,6 +239,10 @@ void Context::copy(ref_ptr<Data> data, ref_ptr<ImageInfo> dest, uint32_t numMipM
 
 void Context::copy(ref_ptr<BufferInfo> src, ref_ptr<BufferInfo> dest)
 {
+    CPU_INSTRUMENTATION_L2_NC(instrumentation, "Context copy", COLOR_COMPILE)
+
+    // info("Context::copy(", src, ", ", dest, ") ", this, ", ", transferTask);
+
     if (!copyBufferCmd)
     {
         copyBufferCmd = CopyAndReleaseBuffer::create();
@@ -277,9 +254,9 @@ void Context::copy(ref_ptr<BufferInfo> src, ref_ptr<BufferInfo> dest)
 
 bool Context::record()
 {
-    if (commands.empty() && buildAccelerationStructureCommands.empty()) return false;
+    CPU_INSTRUMENTATION_L1_NC(instrumentation, "Context record", COLOR_COMPILE)
 
-    //auto before_compile = std::chrono::steady_clock::now();
+    if (commands.empty() && buildAccelerationStructureCommands.empty()) return false;
 
     if (!fence)
     {
@@ -298,22 +275,24 @@ bool Context::record()
 
     vkBeginCommandBuffer(*commandBuffer, &beginInfo);
 
-    // issue commands of interest
     {
-        for (auto& command : commands) command->record(*commandBuffer);
-    }
+        COMMAND_BUFFER_INSTRUMENTATION(instrumentation, *commandBuffer, "Context record", COLOR_COMPILE)
 
-    // create scratch buffer and issue build acceleration structure commands
-    ref_ptr<Buffer> scratchBuffer;
-    ref_ptr<DeviceMemory> scratchBufferMemory;
-    if (scratchBufferSize > 0)
-    {
-        scratchBuffer = vsg::createBufferAndMemory(device, scratchBufferSize, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT, VK_SHARING_MODE_EXCLUSIVE, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
-
-        for (auto& command : buildAccelerationStructureCommands)
+        // issue commands of interest
         {
-            command->setScratchBuffer(scratchBuffer);
-            command->record(*commandBuffer);
+            for (auto& command : commands) command->record(*commandBuffer);
+        }
+
+        // create scratch buffer and issue build acceleration structure commands
+        if (scratchBufferSize > 0)
+        {
+            ref_ptr<Buffer> scratchBuffer = vsg::createBufferAndMemory(device, scratchBufferSize, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT, VK_SHARING_MODE_EXCLUSIVE, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+
+            for (auto& command : buildAccelerationStructureCommands)
+            {
+                command->setScratchBuffer(scratchBuffer);
+                command->record(*commandBuffer);
+            }
         }
     }
 
@@ -327,6 +306,8 @@ bool Context::record()
     submitInfo.pCommandBuffers = commandBuffer->data();
     if (semaphore)
     {
+        vsg::info("Context::record() semaphore assigned to submitInfo ", semaphore);
+
         submitInfo.signalSemaphoreCount = 1;
         submitInfo.pSignalSemaphores = semaphore->data();
         submitInfo.pWaitDstStageMask = &waitDstStageMask;
@@ -339,20 +320,21 @@ bool Context::record()
 
     graphicsQueue->submit(submitInfo, fence);
 
+    requiresWaitForCompletion = true;
+
     return true;
 }
 
 void Context::waitForCompletion()
 {
-    if (!commandBuffer || !fence)
+    CPU_INSTRUMENTATION_L1_NC(instrumentation, "Context waitForCompletion", COLOR_COMPILE)
+
+    if (!requiresWaitForCompletion || !commandBuffer || !fence)
     {
         return;
     }
 
-    if (commands.empty() && buildAccelerationStructureCommands.empty())
-    {
-        return;
-    }
+    // auto start_point = vsg::clock::now();
 
     // we must wait for the queue to empty before we can safely clean up the commandBuffer
     uint64_t timeout = 1000000000;
@@ -368,6 +350,9 @@ void Context::waitForCompletion()
         info("Context::waitForCompletion()  ", this, " fence->wait() failed with error. VkResult = ", result);
     }
 
+    //vsg::info("Conext::waitForCompletion() ", std::chrono::duration<double, std::chrono::milliseconds::period>(vsg::clock::now() - start_point).count());
+
+    requiresWaitForCompletion = false;
     commands.clear();
     copyImageCmd = nullptr;
     copyBufferCmd = nullptr;

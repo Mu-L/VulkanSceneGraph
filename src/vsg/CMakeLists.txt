@@ -1,5 +1,3 @@
-include(CheckCXXSourceCompiles)
-
 # collect all the headers in the source directory
 file(GLOB HEADERS ${VSG_SOURCE_DIR}/include/vsg/*.h ${VSG_SOURCE_DIR}/include/vsg/*/*.h)
 
@@ -13,6 +11,7 @@ endif()
 set(SOURCES
 
     core/Allocator.cpp
+    core/IntrusiveAllocator.cpp
     core/Auxiliary.cpp
     core/ConstVisitor.cpp
     core/Data.cpp
@@ -23,6 +22,7 @@ set(SOURCES
     core/Visitor.cpp
     core/Version.cpp
 
+    maths/common.cpp
     maths/maths_transform.cpp
 
     nodes/Group.cpp
@@ -35,15 +35,28 @@ set(SOURCES
     nodes/PagedLOD.cpp
     nodes/AbsoluteTransform.cpp
     nodes/MatrixTransform.cpp
+    nodes/CoordinateFrame.cpp
     nodes/Transform.cpp
     nodes/VertexDraw.cpp
     nodes/VertexIndexDraw.cpp
     nodes/DepthSorted.cpp
+    nodes/Layer.cpp
     nodes/Bin.cpp
     nodes/Switch.cpp
     nodes/StateGroup.cpp
-    nodes/Light.cpp
     nodes/TileDatabase.cpp
+    nodes/InstrumentationNode.cpp
+    nodes/RegionOfInterest.cpp
+
+    lighting/Light.cpp
+    lighting/AmbientLight.cpp
+    lighting/DirectionalLight.cpp
+    lighting/PointLight.cpp
+    lighting/SpotLight.cpp
+    lighting/ShadowSettings.cpp
+    lighting/HardShadows.cpp
+    lighting/SoftShadows.cpp
+    lighting/PercentageCloserSoftShadows.cpp
 
     commands/BindIndexBuffer.cpp
     commands/BindVertexBuffers.cpp
@@ -54,6 +67,7 @@ set(SOURCES
     commands/CopyAndReleaseBuffer.cpp
     commands/CopyAndReleaseImage.cpp
     commands/ClearAttachments.cpp
+    commands/ClearImage.cpp
     commands/PipelineBarrier.cpp
     commands/Event.cpp
     commands/NextSubPass.cpp
@@ -66,6 +80,7 @@ set(SOURCES
     commands/SetLineWidth.cpp
     commands/SetScissor.cpp
     commands/SetViewport.cpp
+    commands/SetPrimitiveTopology.cpp
     commands/ResolveImage.cpp
     commands/ResetQueryPool.cpp
     commands/WriteTimestamp.cpp
@@ -129,6 +144,7 @@ set(SOURCES
     io/spirv.cpp
     io/tile.cpp
     io/glsl.cpp
+    io/txt.cpp
     io/read.cpp
     io/write.cpp
     io/mem_stream.cpp
@@ -140,31 +156,31 @@ set(SOURCES
     text/Text.cpp
     text/TextGroup.cpp
 
-
     threading/Affinity.cpp
     threading/OperationThreads.cpp
+    threading/DeleteQueue.cpp
 
-    viewer/Camera.cpp
-    viewer/CompileManager.cpp
-    viewer/EllipsoidModel.cpp
-    viewer/Viewer.cpp
-    viewer/Window.cpp
-    viewer/WindowAdapter.cpp
-    viewer/WindowTraits.cpp
-    viewer/Trackball.cpp
-    viewer/CommandGraph.cpp
-    viewer/SecondaryCommandGraph.cpp
-    viewer/RenderGraph.cpp
-    viewer/Presentation.cpp
-    viewer/RecordAndSubmitTask.cpp
-    viewer/TransferTask.cpp
-    viewer/WindowResizeHandler.cpp
-    viewer/View.cpp
-    viewer/ViewMatrix.cpp
-    viewer/ProjectionMatrix.cpp
-    viewer/UpdateOperations.cpp
-    viewer/RecordTraversal.cpp
-    viewer/CompileTraversal.cpp
+    app/Camera.cpp
+    app/CompileManager.cpp
+    app/EllipsoidModel.cpp
+    app/Viewer.cpp
+    app/Window.cpp
+    app/WindowAdapter.cpp
+    app/WindowTraits.cpp
+    app/Trackball.cpp
+    app/CommandGraph.cpp
+    app/SecondaryCommandGraph.cpp
+    app/RenderGraph.cpp
+    app/Presentation.cpp
+    app/RecordAndSubmitTask.cpp
+    app/TransferTask.cpp
+    app/WindowResizeHandler.cpp
+    app/View.cpp
+    app/ViewMatrix.cpp
+    app/ProjectionMatrix.cpp
+    app/UpdateOperations.cpp
+    app/RecordTraversal.cpp
+    app/CompileTraversal.cpp
 
     raytracing/AccelerationGeometry.cpp
     raytracing/AccelerationStructure.cpp
@@ -176,9 +192,20 @@ set(SOURCES
     raytracing/TopLevelAccelerationStructure.cpp
     raytracing/TraceRays.cpp
 
-    rtx/DrawMeshTasks.cpp
-    rtx/DrawMeshTasksIndirect.cpp
-    rtx/DrawMeshTasksIndirectCount.cpp
+    meshshaders/DrawMeshTasks.cpp
+    meshshaders/DrawMeshTasksIndirect.cpp
+    meshshaders/DrawMeshTasksIndirectCount.cpp
+
+    animation/Animation.cpp
+    animation/AnimationGroup.cpp
+    animation/AnimationManager.cpp
+    animation/CameraAnimationHandler.cpp
+    animation/FindAnimations.cpp
+    animation/Joint.cpp
+    animation/JointSampler.cpp
+    animation/MorphSampler.cpp
+    animation/CameraSampler.cpp
+    animation/TransformSampler.cpp
 
     ui/UIEvent.cpp
     ui/ApplicationEvent.cpp
@@ -192,18 +219,21 @@ set(SOURCES
     ui/ShiftEventTime.cpp
     ui/PlayEvents.cpp
     ui/PrintEvents.cpp
+    ui/Keyboard.cpp
 
     vk/CommandBuffer.cpp
     vk/CommandPool.cpp
     vk/Context.cpp
     vk/DescriptorPool.cpp
+    vk/DescriptorPools.cpp
     vk/Device.cpp
     vk/DeviceFeatures.cpp
     vk/DeviceMemory.cpp
-    vk/Extensions.cpp
+    vk/DeviceExtensions.cpp
     vk/Fence.cpp
     vk/Framebuffer.cpp
     vk/Instance.cpp
+    vk/InstanceExtensions.cpp
     vk/MemoryBufferPools.cpp
     vk/PhysicalDevice.cpp
     vk/Queue.cpp
@@ -213,23 +243,24 @@ set(SOURCES
     vk/Swapchain.cpp
     vk/ResourceRequirements.cpp
 
-    utils/AnimationPath.cpp
     utils/CommandLine.cpp
+    utils/CoordinateSpace.cpp
     utils/Builder.cpp
     utils/SharedObjects.cpp
     utils/ShaderSet.cpp
-    utils/GraphicsPipelineConfig.cpp
+    utils/GraphicsPipelineConfigurator.cpp
     utils/ShaderCompiler.cpp
     utils/ComputeBounds.cpp
     utils/Intersector.cpp
+    utils/Instrumentation.cpp
+    utils/GpuAnnotation.cpp
     utils/LineSegmentIntersector.cpp
+    utils/PolytopeIntersector.cpp
     utils/LoadPagedLOD.cpp
+    utils/FindDynamicObjects.cpp
+    utils/PropagateDynamicObjects.cpp
+    utils/Profiler.cpp
 )
-
-# add platform specific Window implementation
-
-
-
 
 # set up library dependencies
 set(LIBRARIES PUBLIC
@@ -237,12 +268,30 @@ set(LIBRARIES PUBLIC
         Threads::Threads
 )
 
+if (${VSG_SUPPORTS_ShaderCompiler})
+    list(INSERT LIBRARIES 0 PRIVATE glslang::glslang glslang::glslang-default-resource-limits glslang::SPIRV)
+endif()
+
+if (VSG_SUPPORTS_ShaderOptimizer)
+    list(INSERT LIBRARIES 0 PRIVATE SPIRV-Tools-opt)
+endif()
+
 # Check for std::atomic
 if(NOT MSVC AND NOT ANDROID AND NOT APPLE)
+  include(CheckCXXSourceCompiles)
+
   check_cxx_source_compiles("
     #include <atomic>
-    std::atomic<int> a;
-    int main() { return a; }"
+    int main()
+    {
+        std::atomic_uint64_t a64(1);
+        auto orig_value = a64.load();
+
+        uint64_t new_value = 1;
+        auto r = a64.compare_exchange_weak(orig_value, new_value);
+
+        return 0;
+    }"
     HAVE_CXX_ATOMIC_WITHOUT_LIB
   )
   if(NOT HAVE_CXX_ATOMIC_WITHOUT_LIB)
@@ -251,115 +300,36 @@ if(NOT MSVC AND NOT ANDROID AND NOT APPLE)
   endif()
 endif()
 
-if (glslang_FOUND)
-    set(LIBRARIES ${LIBRARIES} PUBLIC ${glslang_LIBRARIES})
+if (VSG_SUPPORTS_Windowing)
+    if (ANDROID)
+        set(HEADERS ${HEADERS} ${VSG_SOURCE_DIR}/include/vsg/platform/android/Android_Window.h)
+        set(SOURCES ${SOURCES} platform/android/Android_Window.cpp)
 
-    include(CheckCXXSourceRuns)
-
-    set(CMAKE_REQUIRED_LIBRARIES ${glslang_LIBRARY})
-    set(CMAKE_REQUIRED_INCLUDES ${glslang_INCLUDE_DIR})
-
-    if (NOT GLSLANG_ResourceLimits_maxDualSourceDrawBuffersEXT)
-        check_cxx_source_compiles("
-            #include <glslang/Include/ResourceLimits.h>
-
-            int main()
-            {
-                TBuiltInResource resource;
-                resource.maxDualSourceDrawBuffersEXT = 0;
-                return 0;
-            }
-        " GLSLANG_ResourceLimits_maxDualSourceDrawBuffersEXT)
-    endif()
-
-    if (GLSLANG_ResourceLimits_maxDualSourceDrawBuffersEXT)
-        set(EXTRA_DEFINES ${EXTRA_DEFINES} "GLSLANG_ResourceLimits_maxDualSourceDrawBuffersEXT")
-    endif()
-
-    if (NOT GLSLANG_EShLanguage_EShLangRayGen)
-        check_cxx_source_compiles("
-            #include <glslang/Public/ShaderLang.h>
-
-            int main()
-            {
-                EShLanguage result = EShLangRayGen;
-                return 0;
-            }
-        " GLSLANG_EShLanguage_EShLangRayGen)
-    endif()
-
-    if (NOT GLSLANG_EShLanguage_EShLangRayGenNV)
-        check_cxx_source_compiles("
-            #include <glslang/Public/ShaderLang.h>
-
-            int main()
-            {
-                EShLanguage result = EShLangRayGenNV;
-                return 0;
-            }
-        " GLSLANG_EShLanguage_EShLangRayGenNV)
-    endif()
-
-    if (GLSLANG_EShLanguage_EShLangRayGen)
-        set(EXTRA_DEFINES ${EXTRA_DEFINES} "GLSLANG_EShLangRayGen")
-    elseif (GLSLANG_EShLanguage_EShLangRayGenNV)
-        set(EXTRA_DEFINES ${EXTRA_DEFINES} "GLSLANG_EShLangRayGenNV")
-    endif()
-
-    if (NOT DEFINED GLSLANG_ResourceLimits_maxMeshViewCountEXT)
-        check_cxx_source_compiles("
-            #include <glslang/Include/ResourceLimits.h>
-
-            int main()
-            {
-                TBuiltInResource resource;
-                resource.maxMeshViewCountEXT = 0;
-                return 0;
-            }
-        " GLSLANG_ResourceLimits_maxMeshViewCountEXT)
-    endif()
-
-    if (GLSLANG_ResourceLimits_maxMeshViewCountEXT)
-        set(EXTRA_DEFINES ${EXTRA_DEFINES} "GLSLANG_ResourceLimits_maxMeshViewCountEXT")
-    endif()
-
-    install(
-        FILES vsg_glslangConfig.cmake
-        DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/vsg_glslang
-    )
-endif()
-
-
-if (ANDROID)
-    set(HEADERS ${HEADERS} ${VSG_SOURCE_DIR}/include/vsg/platform/android/Android_Window.h)
-    set(SOURCES ${SOURCES} platform/android/Android_Window.cpp)
-
-    if(CMAKE_SYSTEM_VERSION GREATER 24)
-        set(LIBRARIES ${LIBRARIES} PRIVATE ${AndroidLib} PRIVATE ${AndroidNativeWindowLib})
+        if(CMAKE_SYSTEM_VERSION GREATER 24)
+            set(LIBRARIES ${LIBRARIES} PRIVATE ${AndroidLib} PRIVATE ${AndroidNativeWindowLib})
+        else()
+            set(LIBRARIES ${LIBRARIES} PRIVATE ${AndroidLib})
+        endif()
+    elseif (WIN32)
+        set(SOURCES ${SOURCES} platform/win32/Win32_Window.cpp)
+    elseif (IOS)
+        set(HEADERS ${HEADERS}
+            ${VSG_SOURCE_DIR}/include/vsg/platform/ios/iOS_Window.h
+            ${VSG_SOURCE_DIR}/include/vsg/platform/ios/iOS_ViewController.h
+        )
+        set(SOURCES ${SOURCES}
+            platform/ios/iOS_Window.mm
+            platform/ios/iOS_ViewController.mm
+        )
+        set(LIBRARIES ${LIBRARIES} PRIVATE ${UIKIT_LIBRARY} PRIVATE ${QUARTZCORE_LIBRARY})
+    elseif (APPLE)
+        set(SOURCES ${SOURCES} platform/macos/MacOS_Window.mm)
+        set(LIBRARIES ${LIBRARIES} PRIVATE ${COCOA_LIBRARY} PRIVATE ${QUARTZCORE_LIBRARY})
     else()
-        set(LIBRARIES ${LIBRARIES} PRIVATE ${AndroidLib})
+        set(SOURCES ${SOURCES} platform/xcb/Xcb_Window.cpp)
+        set(LIBRARIES ${LIBRARIES} PRIVATE PkgConfig::xcb)
     endif()
-
-elseif (WIN32)
-    set(SOURCES ${SOURCES} platform/win32/Win32_Window.cpp)
-elseif (IOS)
-    set(HEADERS ${HEADERS}
-        ${VSG_SOURCE_DIR}/include/vsg/platform/ios/iOS_Window.h
-        ${VSG_SOURCE_DIR}/include/vsg/platform/ios/iOS_ViewController.h
-    )
-    set(SOURCES ${SOURCES}
-        platform/ios/iOS_Window.mm
-        platform/ios/iOS_ViewController.mm
-    )
-    set(LIBRARIES ${LIBRARIES} PRIVATE ${UIKIT_LIBRARY} PRIVATE ${QUARTZCORE_LIBRARY})
-elseif (APPLE)
-    set(SOURCES ${SOURCES} platform/macos/MacOS_Window.mm)
-    set(LIBRARIES ${LIBRARIES} PRIVATE ${COCOA_LIBRARY} PRIVATE ${QUARTZCORE_LIBRARY})
-else()
-    set(SOURCES ${SOURCES} platform/unix/Xcb_Window.cpp)
-    set(LIBRARIES ${LIBRARIES} PRIVATE PkgConfig::xcb)
 endif()
-
 
 add_library(vsg ${HEADERS} ${SOURCES})
 
@@ -391,7 +361,7 @@ if(MSVC)
 
     SET_OUTPUT_DIR_PROPERTY(vsg "")
 
-    option(ENABLE_MP_FLAG "Turning on this option will add the multi-processor flag in MSVC for VSG and it's included projects" ON)
+    option(ENABLE_MP_FLAG "Turning on this option will add the multi-processor flag in MSVC for VSG and its included projects" ON)
 
     if(ENABLE_MP_FLAG)
         target_compile_options(vsg PRIVATE "/MP")
@@ -433,28 +403,42 @@ set_property(TARGET vsg PROPERTY VERSION ${VSG_VERSION_MAJOR}.${VSG_VERSION_MINO
 set_property(TARGET vsg PROPERTY SOVERSION ${VSG_SOVERSION})
 set_property(TARGET vsg PROPERTY POSITION_INDEPENDENT_CODE ON)
 set_property(TARGET vsg PROPERTY CXX_STANDARD 17)
+if(WIN32)
+    set_property(TARGET vsg PROPERTY RUNTIME_OUTPUT_NAME vsg-${VSG_SOVERSION})
+endif()
 
 target_compile_definitions(vsg PRIVATE ${EXTRA_DEFINES})
-target_include_directories(vsg PUBLIC $<BUILD_INTERFACE:${VSG_SOURCE_DIR}/include> $<BUILD_INTERFACE:${VSG_BINARY_DIR}/include>)
-
+target_include_directories(vsg
+    PUBLIC
+        $<BUILD_INTERFACE:${VSG_SOURCE_DIR}/include>
+        $<BUILD_INTERFACE:${VSG_BINARY_DIR}/include>
+)
 
 target_link_libraries(vsg ${LIBRARIES})
-
-
-install(TARGETS vsg ${INSTALL_TARGETS_DEFAULT_FLAGS})
 
 if (BUILD_SHARED_LIBS)
     target_compile_definitions(vsg INTERFACE VSG_SHARED_LIBRARY)
 endif()
 
+# install headers
 install(DIRECTORY ${VSG_SOURCE_DIR}/include/vsg DESTINATION include)
+
 if (NOT(${VSG_BINARY_DIR} STREQUAL ${VSG_SOURCE_DIR}))
     install(DIRECTORY ${VSG_BINARY_DIR}/include/vsg DESTINATION include)
 endif()
 
-if (glslang_FOUND)
-    set(FIND_DEPENDENCY_GLSLANG "find_dependency(vsg_glslang)")
-endif()
+# install lib
+install(TARGETS vsg ${VSG_INSTALL_TARGETS_DEFAULT_FLAGS})
+
+# install cmake config files.
+install(
+    FILES
+        "${VSG_SOURCE_DIR}/cmake/FindVulkan.cmake"
+        "${VSG_SOURCE_DIR}/cmake/uninstall.cmake"
+        "${VSG_SOURCE_DIR}/cmake/vsgMacros.cmake"
+    DESTINATION
+        ${CMAKE_INSTALL_LIBDIR}/cmake/vsg
+)
 
 vsg_add_cmake_support_files(
     CONFIG_TEMPLATE vsgConfig.cmake.in

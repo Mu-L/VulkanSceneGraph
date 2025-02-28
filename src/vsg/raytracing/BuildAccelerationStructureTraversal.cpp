@@ -10,7 +10,6 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
 </editor-fold> */
 
-#include <vsg/io/Options.h>
 #include <vsg/raytracing/BuildAccelerationStructureTraversal.h>
 
 using namespace vsg;
@@ -38,7 +37,7 @@ void BuildAccelerationStructureTraversal::apply(Transform& transform)
 
 void BuildAccelerationStructureTraversal::apply(Geometry& geometry)
 {
-    if (geometry.arrays.size() == 0) return;
+    if (geometry.arrays.empty()) return;
 
     // check cache
     auto& blas = _geometryBlasMap[&geometry];
@@ -62,7 +61,7 @@ void BuildAccelerationStructureTraversal::apply(Geometry& geometry)
 
 void BuildAccelerationStructureTraversal::apply(VertexIndexDraw& vid)
 {
-    if (vid.arrays.size() == 0) return;
+    if (vid.arrays.empty()) return;
 
     // check cache
     auto& blas = _vertexIndexDrawBlasMap[&vid];

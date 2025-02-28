@@ -10,11 +10,9 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
 </editor-fold> */
 
-#include <vsg/nodes/Switch.h>
-
 #include <vsg/io/Input.h>
-#include <vsg/io/Options.h>
 #include <vsg/io/Output.h>
+#include <vsg/nodes/Switch.h>
 
 using namespace vsg;
 
@@ -22,8 +20,39 @@ Switch::Switch()
 {
 }
 
+Switch::Switch(const Switch& rhs, const CopyOp& copyop) :
+    Inherit(rhs, copyop)
+{
+    children.reserve(rhs.children.size());
+    for (auto child : rhs.children)
+    {
+        children.push_back(Child{child.mask, copyop(child.node)});
+    }
+}
+
 Switch::~Switch()
 {
+}
+
+int Switch::compare(const Object& rhs_object) const
+{
+    int result = Object::compare(rhs_object);
+    if (result != 0) return result;
+
+    auto& rhs = static_cast<decltype(*this)>(rhs_object);
+
+    // compare the children vector
+    if (children.size() < rhs.children.size()) return -1;
+    if (children.size() > rhs.children.size()) return 1;
+    if (children.empty()) return 0;
+
+    auto rhs_itr = rhs.children.begin();
+    for (auto lhs_itr = children.begin(); lhs_itr != children.end(); ++lhs_itr, ++rhs_itr)
+    {
+        if ((result = compare_value(lhs_itr->mask, rhs_itr->mask)) != 0) return result;
+        if ((result = compare_pointer(lhs_itr->node, rhs_itr->node)) != 0) return result;
+    }
+    return 0;
 }
 
 void Switch::read(Input& input)
@@ -62,7 +91,7 @@ void Switch::addChild(bool enabled, ref_ptr<Node> child)
 
 void Switch::setAllChildren(bool enabled)
 {
-    uint32_t mask = boolToMask(enabled);
+    Mask mask = boolToMask(enabled);
     for (auto& child : children) child.mask = mask;
 }
 

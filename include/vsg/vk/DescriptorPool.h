@@ -12,16 +12,17 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
 </editor-fold> */
 
+#include <vsg/io/stream.h>
 #include <vsg/state/DescriptorSet.h>
 
 namespace vsg
 {
 
-    /// DesctiporPool encapsulates management of VkDescriptorPool
+    /// DescriptorPool encapsulates management of VkDescriptorPool
     class VSG_DECLSPEC DescriptorPool : public Inherit<Object, DescriptorPool>
     {
     public:
-        DescriptorPool(Device* device, uint32_t maxSets, const DescriptorPoolSizes& descriptorPoolSizes);
+        DescriptorPool(Device* device, uint32_t in_maxSets, const DescriptorPoolSizes& in_descriptorPoolSizes);
 
         operator VkDescriptorPool() const { return _descriptorPool; }
         VkDescriptorPool vk() const { return _descriptorPool; }
@@ -32,15 +33,24 @@ namespace vsg
         /// allocate or reuse available DescriptorSet::Implementation - called automatically when compiling DescriptorSet
         ref_ptr<DescriptorSet::Implementation> allocateDescriptorSet(DescriptorSetLayout* descriptorSetLayout);
 
-        /// free DescriptorSet::Implementation for reuse - called automatically be destruction of DescriptorSet or release of it's Vulkan resources.
+        /// free DescriptorSet::Implementation for reuse - called automatically by destruction of DescriptorSet or release of its Vulkan resources.
         void freeDescriptorSet(ref_ptr<DescriptorSet::Implementation> dsi);
 
         /// get the stats of the available DescriptorSets/Descriptors
-        bool getAvailablity(uint32_t& maxSets, DescriptorPoolSizes& descriptorPoolSizes) const;
+        bool available(uint32_t& numSets, DescriptorPoolSizes& descriptorPoolSizes) const;
 
-        /// mutex used to ensure thead safe access of DesciptorPool resources.
-        /// Locked automatically by allocatoeDecstiproSet(..), freeDescriptorSet(), getAvailablity() and DescriptorSet:::Implementation
-        /// to ensure thread safe operation. Normal VulkanSceneGraph usage will not require users to lock this mutex so threat as an internal implementation detail.
+        /// compute the number of sets and descriptors used.
+        bool used(uint32_t& numSets, DescriptorPoolSizes& usedDescriptorPoolSizes) const;
+
+        /// write the internal details to stream.
+        void report(std::ostream& out, indentation indent = {}) const;
+
+        const uint32_t maxSets = 0;
+        const DescriptorPoolSizes descriptorPoolSizes;
+
+        /// mutex used to ensure thread safe access of DescriptorPool resources.
+        /// Locked automatically by allocateDescriptorSet(..), freeDescriptorSet(), available() and DescriptorSet:::Implementation
+        /// to ensure thread safe operation. Normal VulkanSceneGraph usage will not require users to lock this mutex so treat as an internal implementation detail.
         mutable std::mutex mutex;
 
     protected:
@@ -52,7 +62,7 @@ namespace vsg
         uint32_t _availableDescriptorSet;
         DescriptorPoolSizes _availableDescriptorPoolSizes;
 
-        std::list<ref_ptr<DescriptorSet::Implementation>> _reclingList;
+        std::list<ref_ptr<DescriptorSet::Implementation>> _recyclingList;
     };
     VSG_type_name(vsg::DescriptorPool);
 

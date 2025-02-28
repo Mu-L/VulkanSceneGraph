@@ -11,7 +11,6 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 </editor-fold> */
 
 #include <vsg/core/Exception.h>
-#include <vsg/io/Options.h>
 #include <vsg/vk/DeviceMemory.h>
 
 #include <atomic>
@@ -20,6 +19,24 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 using namespace vsg;
 
 #define DO_CHECK 0
+
+static std::mutex s_DeviceMemoryListMutex;
+static std::list<vsg::observer_ptr<DeviceMemory>> s_DeviceMemoryList;
+
+DeviceMemoryList vsg::getActiveDeviceMemoryList(VkMemoryPropertyFlagBits propertyFlags)
+{
+    std::scoped_lock<std::mutex> lock(s_DeviceMemoryListMutex);
+    DeviceMemoryList dml;
+    for (auto& dm : s_DeviceMemoryList)
+    {
+        auto dm_ref_ptr = dm.ref_ptr();
+        if ((dm_ref_ptr->getMemoryPropertyFlags() & propertyFlags) != 0)
+        {
+            dml.push_back(dm_ref_ptr);
+        }
+    }
+    return dml;
+}
 
 ///////////////////////////////////////////////////////////////////////////////
 //
@@ -43,7 +60,7 @@ DeviceMemory::DeviceMemory(Device* device, const VkMemoryRequirements& memRequir
     }
     if (i >= memProperties.memoryTypeCount)
     {
-        throw Exception{"Error: vsg::DeviceMemory::create(...) failed to create DeviceMemory, not usage memory type found.", VK_ERROR_FORMAT_NOT_SUPPORTED};
+        throw Exception{"Error: vsg::DeviceMemory::create(...) failed to create DeviceMemory, no usable memory type found.", VK_ERROR_FORMAT_NOT_SUPPORTED};
     }
     uint32_t memoryTypeIndex = i;
 
@@ -72,6 +89,12 @@ DeviceMemory::DeviceMemory(Device* device, const VkMemoryRequirements& memRequir
     {
         throw Exception{"Error: Failed to allocate DeviceMemory.", result};
     }
+
+    {
+        std::scoped_lock<std::mutex> lock(s_DeviceMemoryListMutex);
+        s_DeviceMemoryList.emplace_back(this);
+        vsg::debug("DeviceMemory::DeviceMemory() added to s_DeviceMemoryList, s_DeviceMemoryList.size() = ", s_DeviceMemoryList.size());
+    }
 }
 
 DeviceMemory::~DeviceMemory()
@@ -83,6 +106,20 @@ DeviceMemory::~DeviceMemory()
 #endif
 
         vkFreeMemory(*_device, _deviceMemory, _device->getAllocationCallbacks());
+    }
+
+    {
+        std::scoped_lock<std::mutex> lock(s_DeviceMemoryListMutex);
+        auto itr = std::find(s_DeviceMemoryList.begin(), s_DeviceMemoryList.end(), this);
+        if (itr != s_DeviceMemoryList.end())
+        {
+            s_DeviceMemoryList.erase(itr);
+            vsg::debug("DeviceMemory::~DeviceMemory() removed from s_DeviceMemoryList, s_DeviceMemoryList.size() = ", s_DeviceMemoryList.size());
+        }
+        else
+        {
+            vsg::warn("DeviceMemory::~DeviceMemory() could not find in  s_DeviceMemoryList");
+        }
     }
 }
 
@@ -106,6 +143,11 @@ void DeviceMemory::copy(VkDeviceSize offset, VkDeviceSize size, const void* src_
     std::memcpy(buffer_data, src_data, (size_t)size);
 
     unmap();
+}
+
+void DeviceMemory::copy(VkDeviceSize offset, const Data* data)
+{
+    copy(offset, data->dataSize(), data->dataPointer());
 }
 
 MemorySlots::OptionalOffset DeviceMemory::reserve(VkDeviceSize size)
@@ -142,4 +184,9 @@ size_t DeviceMemory::totalReservedSize() const
 {
     std::scoped_lock<std::mutex> lock(_mutex);
     return _memorySlots.totalReservedSize();
+}
+
+size_t DeviceMemory::totalMemorySize() const
+{
+    return _memorySlots.totalMemorySize();
 }

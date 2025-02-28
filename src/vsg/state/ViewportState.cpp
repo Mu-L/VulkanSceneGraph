@@ -11,7 +11,6 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 </editor-fold> */
 
 #include <vsg/core/compare.h>
-#include <vsg/io/Options.h>
 #include <vsg/state/ViewportState.h>
 #include <vsg/vk/Context.h>
 
@@ -19,6 +18,7 @@ using namespace vsg;
 
 ViewportState::ViewportState()
 {
+    slot = 8;
 }
 
 ViewportState::ViewportState(const ViewportState& vs) :
@@ -28,12 +28,14 @@ ViewportState::ViewportState(const ViewportState& vs) :
 {
 }
 
-ViewportState::ViewportState(const VkExtent2D& extent)
+ViewportState::ViewportState(const VkExtent2D& extent) :
+    ViewportState()
 {
     set(0, 0, extent.width, extent.height);
 }
 
-ViewportState::ViewportState(int32_t x, int32_t y, uint32_t width, uint32_t height)
+ViewportState::ViewportState(int32_t x, int32_t y, uint32_t width, uint32_t height) :
+    ViewportState()
 {
     set(x, y, width, height);
 }
@@ -44,10 +46,10 @@ ViewportState::~ViewportState()
 
 int ViewportState::compare(const Object& rhs_object) const
 {
-    int result = Object::compare(rhs_object);
+    int result = GraphicsPipelineState::compare(rhs_object);
     if (result != 0) return result;
 
-    auto& rhs = static_cast<decltype(*this)>(rhs_object);
+    const auto& rhs = static_cast<decltype(*this)>(rhs_object);
 
     if ((result = compare_value_container(viewports, rhs.viewports))) return result;
     return compare_value_container(scissors, rhs.scissors);
@@ -73,7 +75,7 @@ void ViewportState::set(int32_t x, int32_t y, uint32_t width, uint32_t height)
 
 void ViewportState::read(Input& input)
 {
-    Object::read(input);
+    GraphicsPipelineState::read(input);
 
     viewports.resize(input.readValue<uint32_t>("viewports"));
     for (auto& viewport : viewports)
@@ -98,7 +100,7 @@ void ViewportState::read(Input& input)
 
 void ViewportState::write(Output& output) const
 {
-    Object::write(output);
+    GraphicsPipelineState::write(output);
 
     output.writeValue<uint32_t>("viewports", viewports.size());
     for (auto& viewport : viewports)
@@ -135,6 +137,12 @@ void ViewportState::apply(Context& context, VkGraphicsPipelineCreateInfo& pipeli
     viewportState->pScissors = scissors.data();
 
     pipelineInfo.pViewportState = viewportState;
+}
+
+void ViewportState::record(CommandBuffer& commandBuffer) const
+{
+    vkCmdSetScissor(commandBuffer, 0, static_cast<uint32_t>(scissors.size()), scissors.data());
+    vkCmdSetViewport(commandBuffer, 0, static_cast<uint32_t>(viewports.size()), viewports.data());
 }
 
 VkViewport& ViewportState::getViewport()

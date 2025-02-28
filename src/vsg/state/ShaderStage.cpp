@@ -11,7 +11,6 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 </editor-fold> */
 
 #include <vsg/core/compare.h>
-#include <vsg/io/Options.h>
 #include <vsg/io/read.h>
 #include <vsg/state/ShaderStage.h>
 #include <vsg/vk/Context.h>
@@ -118,6 +117,11 @@ void ShaderStage::read(Input& input)
 {
     Object::read(input);
 
+    if (input.version_greater_equal(1, 0, 9))
+    {
+        input.read("mask", mask);
+    }
+
     input.readValue<int32_t>("stage", stage);
     input.read("entryPointName", entryPointName);
     input.readObject("module", module);
@@ -134,6 +138,11 @@ void ShaderStage::read(Input& input)
 void ShaderStage::write(Output& output) const
 {
     Object::write(output);
+
+    if (output.version_greater_equal(1, 0, 9))
+    {
+        output.write("mask", mask);
+    }
 
     output.writeValue<int32_t>("stage", stage);
     output.write("entryPointName", entryPointName);

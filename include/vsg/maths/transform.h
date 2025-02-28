@@ -53,7 +53,7 @@ namespace vsg
                          0, 0, 0, 1);
     }
 
-    /// create a 4x4 matrix that represents the rotation by a radian angle around an vec3 axis
+    /// create a 4x4 matrix that represents the rotation by a radian angle around a vec3 axis
     template<typename T>
     t_mat4<T> rotate(T angle_radians, const t_vec3<T>& v)
     {
@@ -75,6 +75,16 @@ namespace vsg
     constexpr t_mat4<T> translate(const t_vec3<T>& v)
     {
         return translate(v.value[0], v.value[1], v.value[2]);
+    }
+
+    /// create a 4x4 matrix that represents the scale by {s, s, s}
+    template<typename T>
+    constexpr t_mat4<T> scale(T s)
+    {
+        return t_mat4<T>(s, 0, 0, 0,
+                         0, s, 0, 0,
+                         0, 0, s, 0,
+                         0, 0, 0, 1);
     }
 
     /// create a 4x4 matrix that represents the scale by sx, sy, zz
@@ -113,9 +123,9 @@ namespace vsg
                          m[0][3], m[1][3], m[2][3], m[3][3]);
     }
 
-    /// create a 4x4 matrix for an Reverse depth perspective matrix,
+    /// create a 4x4 matrix for a Reverse depth perspective matrix,
     /// Reverse depth convention: 1 to 0 depth range. Y NDC coordinates are inverted in Vulkan.
-    /// For best precision we record setting up Windows with windowTraits->depthFormat = VK_FORMAT_D32_SFLOAT;
+    /// For best precision we recommend setting up windows with windowTraits->depthFormat = VK_FORMAT_D32_SFLOAT;
     /// Background reading : https://developer.nvidia.com/content/depth-precision-visualized
     //.                      https://vincent-p.github.io/posts/vulkan_perspective_matrix/
     template<typename T>
@@ -129,7 +139,7 @@ namespace vsg
                          0, 0, (zFar * zNear) * r, 0);
     }
 
-    /// create a 4x4 matrix for an Reverse depth perspective matrix, convention: 1 to 0 depth range. Y NDC coordinates are inverted in Vulkan.
+    /// create a 4x4 matrix for a Reverse depth perspective matrix, convention: 1 to 0 depth range. Y NDC coordinates are inverted in Vulkan.
     template<typename T>
     constexpr t_mat4<T> perspective(T left, T right, T bottom, T top, T zNear, T zFar)
     {
@@ -166,6 +176,25 @@ namespace vsg
                vsg::translate(-eye.x, -eye.y, -eye.z);
     }
 
+    template<typename T>
+    constexpr t_mat4<T> computeBillboardMatrix(const t_vec3<T>& centerEye, T autoscaleDistance)
+    {
+        auto distance = -centerEye.z;
+
+        auto scale = (distance < autoscaleDistance) ? distance / autoscaleDistance : 1.0;
+        t_mat4<T> mS(scale, 0.0, 0.0, 0.0,
+                     0.0, scale, 0.0, 0.0,
+                     0.0, 0.0, scale, 0.0,
+                     0.0, 0.0, 0.0, 1.0);
+
+        t_mat4<T> mT(1.0, 0.0, 0.0, 0.0,
+                     0.0, 1.0, 0.0, 0.0,
+                     0.0, 0.0, 1.0, 0.0,
+                     centerEye.x, centerEye.y, centerEye.z, 1.0);
+
+        return mT * mS;
+    }
+
     /// Hint on axis, using Collada conventions, all Right Hand
     enum class CoordinateConvention
     {
@@ -185,10 +214,10 @@ namespace vsg
     /// invert the top left 3x3 portion of a double 4x4 matrix.
     extern VSG_DECLSPEC dmat3 inverse_3x3(const dmat4& m);
 
-    /// fast float matrix inversion that use assumes the matrix is composed of only scales, rotations and translations forming a 4x3 matrix.
+    /// fast float matrix inversion that assumes the matrix is composed of only scales, rotations and translations forming a 4x3 matrix.
     extern VSG_DECLSPEC mat4 inverse_4x3(const mat4& m);
 
-    /// fast double matrix inversion that use assumes the matrix is composed of only scales, rotations and translations forming a 4x3 matrix.
+    /// fast double matrix inversion that assumes the matrix is composed of only scales, rotations and translations forming a 4x3 matrix.
     extern VSG_DECLSPEC dmat4 inverse_4x3(const dmat4& m);
 
     /// general purpose 4x4 float matrix inversion.
@@ -219,6 +248,11 @@ namespace vsg
     /// assumes matrix has no skew or perspective components
     extern VSG_DECLSPEC bool decompose(const dmat4& m, dvec3& translation, dquat& rotation, dvec3& scale);
 
+    /// decompose long double matrix into translation, rotation and scale components.
+    /// maps to TRS form: vsg::translate(translation) * vsg::rotate(rotation) * vsg::scale(scale);
+    /// assumes matrix has no skew or perspective components
+    extern VSG_DECLSPEC bool decompose(const ldmat4& m, ldvec3& translation, ldquat& rotation, ldvec3& scale);
+
     /// compute the bounding sphere that encloses a frustum defined by specified float ModelViewMatrixProjection
     extern VSG_DECLSPEC sphere computeFrustumBound(const mat4& m);
 
@@ -229,10 +263,12 @@ namespace vsg
     /// usage:  auto matrix = vsg::visit<vsg::ComputeTransform>(nodePath).matrix;
     struct VSG_DECLSPEC ComputeTransform : public ConstVisitor
     {
+        dvec3 origin;
         dmat4 matrix;
 
         void apply(const Transform& transform) override;
         void apply(const MatrixTransform& mt) override;
+        void apply(const CoordinateFrame& cf) override;
         void apply(const Camera& camera) override;
     };
 

@@ -12,9 +12,9 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
 </editor-fold> */
 
+#include <vsg/app/Window.h>
 #include <vsg/core/observer_ptr.h>
 #include <vsg/ui/UIEvent.h>
-#include <vsg/viewer/Window.h>
 
 namespace vsg
 {
@@ -59,7 +59,7 @@ namespace vsg
     };
     VSG_type_name(vsg::ExposeWindowEvent);
 
-    /// ExposeWindowEvent represents a window configure event - such as changes to the size of the window.
+    /// ConfigureWindowEvent represents a window configure event - such as changes to the size of the window.
     class VSG_DECLSPEC ConfigureWindowEvent : public Inherit<WindowEvent, ConfigureWindowEvent>
     {
     public:
@@ -92,5 +92,27 @@ namespace vsg
             Inherit(in_window, in_time) {}
     };
     VSG_type_name(vsg::CloseWindowEvent);
+
+    /// FocusInEvent represents a window acquiring focus event.
+    class FocusInEvent : public Inherit<WindowEvent, FocusInEvent>
+    {
+    public:
+        FocusInEvent() {}
+
+        FocusInEvent(Window* in_window, time_point in_time) :
+            Inherit(in_window, in_time) {}
+    };
+    VSG_type_name(vsg::FocusInEvent);
+
+    /// FocusOutEvent represents a window losing focus event.
+    class FocusOutEvent : public Inherit<WindowEvent, FocusOutEvent>
+    {
+    public:
+        FocusOutEvent() {}
+
+        FocusOutEvent(Window* in_window, time_point in_time) :
+            Inherit(in_window, in_time) {}
+    };
+    VSG_type_name(vsg::FocusOutEvent);
 
 } // namespace vsg

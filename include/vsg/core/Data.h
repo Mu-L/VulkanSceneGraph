@@ -36,10 +36,16 @@ namespace vsg
     };
 
     /** 64 bit block of compressed texel data.*/
-    using block64 = uint8_t[8];
+    struct block64
+    {
+        uint8_t value[8];
+    };
 
     /** 128 bit block of compressed texel data.*/
-    using block128 = uint8_t[16];
+    struct block128
+    {
+        uint8_t value[16];
+    };
 
     enum Origin : uint8_t
     {
@@ -49,7 +55,7 @@ namespace vsg
 
     enum DataVariance : uint8_t
     {
-        STATIC_DATA = 0,                       /** treat data as if doesn't not change .*/
+        STATIC_DATA = 0,                       /** treat data as if it doesn't change .*/
         STATIC_DATA_UNREF_AFTER_TRANSFER = 1,  /** unref this vsg::Data after the data has been transferred to the GPU memory .*/
         DYNAMIC_DATA = 2,                      /** data is updated prior to the record traversal and will need transferring to GPU memory.*/
         DYNAMIC_DATA_TRANSFER_AFTER_RECORD = 3 /** data is updated during the record traversal and will need transferring to GPU memory.*/
@@ -98,7 +104,7 @@ namespace vsg
         value_type* operator->() { return reinterpret_cast<value_type*>(ptr); }
     };
 
-    /// Data base class for abstracting data such a values, vertices, images etc.
+    /// Data base class for abstracting data such as values, vertices, images etc.
     /// Main subclasses are vsg::Value, vsg::Array, vsg::Array2D and vsg::Array3D.
     class VSG_DECLSPEC Data : public Object
     {
@@ -106,8 +112,13 @@ namespace vsg
         /* Properties used for specifying the format of the data, use of mipmaps, block compressed data and origin.
          * Default of no mipmapping and {1,1,1} is uncompressed.
          * A single block (Block64/Block128) is stored as a single value with the Data object. */
-        struct Properties
+        struct VSG_DECLSPEC Properties
         {
+            Properties() = default;
+            Properties(const Properties& rhs) = default;
+            explicit Properties(VkFormat in_format) :
+                format(in_format) {}
+
             VkFormat format = VK_FORMAT_UNDEFINED;
             uint32_t stride = 0;
             uint8_t maxNumMipmaps = 0;
@@ -116,16 +127,17 @@ namespace vsg
             uint8_t blockDepth = 1;
             uint8_t origin = TOP_LEFT;               /// Hint for setting up texture coordinates, bit 0 x/width axis, bit 1 y/height axis, bit 2 z/depth axis. Vulkan origin for images is top left, which is denoted as 0 here.
             int8_t imageViewType = -1;               /// -1 signifies undefined VkImageViewType, if value >=0 then value should be treated as valid VkImageViewType.
-            DataVariance dataVariance = STATIC_DATA; /// hint as how the data values may change during the lifetime of the vsg::Data.
+            DataVariance dataVariance = STATIC_DATA; /// hint as to how the data values may change during the lifetime of the vsg::Data.
             AllocatorType allocatorType = ALLOCATOR_TYPE_VSG_ALLOCATOR;
 
-            int compare(const Properties& rhs) const
-            {
-                return compare_region(format, allocatorType, rhs.format);
-            }
+            int compare(const Properties& rhs) const;
+            Properties& operator=(const Properties& rhs);
         };
 
         Data() {}
+
+        Data(const Data& data, const CopyOp& copyop = {}) :
+            Object(data, copyop), properties(data.properties) {}
 
         explicit Data(Properties layout) :
             properties(layout) {}
@@ -137,31 +149,13 @@ namespace vsg
         }
 
         /// provide new and delete to enable custom memory management via the vsg::Allocator singleton, using the MEMORY_AFFINTY_DATA
-        static void* operator new(std::size_t count);
+        static void* operator new(size_t count);
         static void operator delete(void* ptr);
 
-        std::size_t sizeofObject() const noexcept override { return sizeof(Data); }
-        bool is_compatible(const std::type_info& type) const noexcept override { return typeid(Data) == type ? true : Object::is_compatible(type); }
+        size_t sizeofObject() const noexcept override { return sizeof(Data); }
+        bool is_compatible(const std::type_info& type) const noexcept override { return typeid(Data) == type || Object::is_compatible(type); }
 
-        int compare(const Object& rhs_object) const override
-        {
-            int result = Object::compare(rhs_object);
-            if (result != 0) return result;
-
-            auto& rhs = static_cast<decltype(*this)>(rhs_object);
-
-            if ((result = properties.compare(rhs.properties))) return result;
-
-            // the shorter data is less
-            if (dataSize() < rhs.dataSize()) return -1;
-            if (dataSize() > rhs.dataSize()) return 1;
-
-            // if both empty then they must be equal
-            if (dataSize() == 0) return 0;
-
-            // use memcpy to compare the contents of the data
-            return std::memcmp(dataPointer(), rhs.dataPointer(), dataSize());
-        }
+        int compare(const Object& rhs_object) const override;
 
         void read(Input& input) override;
         void write(Output& output) const override;
@@ -171,10 +165,11 @@ namespace vsg
 
         bool dynamic() const { return properties.dataVariance >= DYNAMIC_DATA; }
 
-        virtual std::size_t valueSize() const = 0;
-        virtual std::size_t valueCount() const = 0;
+        virtual size_t valueSize() const = 0;
+        virtual size_t valueCount() const = 0;
 
-        virtual std::size_t dataSize() const = 0;
+        virtual bool dataAvailable() const = 0;
+        virtual size_t dataSize() const = 0;
 
         virtual void* dataPointer() = 0;
         virtual const void* dataPointer() const = 0;
@@ -184,19 +179,19 @@ namespace vsg
 
         virtual void* dataRelease() = 0;
 
-        virtual std::uint32_t dimensions() const = 0;
+        virtual uint32_t dimensions() const = 0;
 
-        virtual std::uint32_t width() const = 0;
-        virtual std::uint32_t height() const = 0;
-        virtual std::uint32_t depth() const = 0;
+        virtual uint32_t width() const = 0;
+        virtual uint32_t height() const = 0;
+        virtual uint32_t depth() const = 0;
 
         bool contiguous() const { return valueSize() == properties.stride; }
 
         uint32_t stride() const { return properties.stride ? properties.stride : static_cast<uint32_t>(valueSize()); }
 
-        using MipmapOffsets = std::vector<std::size_t>;
+        using MipmapOffsets = std::vector<size_t>;
         MipmapOffsets computeMipmapOffsets() const;
-        static std::size_t computeValueCountIncludingMipmaps(std::size_t w, std::size_t h, std::size_t d, uint32_t maxNumMipmaps);
+        static size_t computeValueCountIncludingMipmaps(size_t w, size_t h, size_t d, uint32_t maxNumMipmaps);
 
         /// increment the ModifiedCount to signify the data has been modified
         void dirty() { ++_modifiedCount; }
@@ -213,7 +208,7 @@ namespace vsg
                 return false;
         }
 
-        /// return true if Data's ModifiedCount is different than the specified ModifiedCount
+        /// return true if Data's ModifiedCount is different from the specified ModifiedCount
         bool differentModifiedCount(const ModifiedCount& mc) const { return _modifiedCount != mc; }
 
     protected:
@@ -229,11 +224,11 @@ namespace vsg
         /// deprecated: use data->properties = properties instead.
         void setLayout(Layout layout)
         {
-            VkFormat previous_format = properties.format; // temporary hack to keep applications that call setFormat(..) before setProperties(..) working
+            VkFormat previous_format = properties.format; // temporary hack to keep applications that call setFormat(..) before setLayout(..) working
             uint32_t previous_stride = properties.stride;
             properties = layout;
             if (properties.format == 0 && previous_format != 0) properties.format = previous_format; // temporary hack to keep existing applications working
-            if (properties.stride == 0 && previous_stride != 0) properties.stride = previous_stride; // make sure the layout as a valid stride.
+            if (properties.stride == 0 && previous_stride != 0) properties.stride = previous_stride; // make sure the layout has a valid stride.
         }
         /// deprecated: use data->properties
         Layout& getLayout() { return properties; }

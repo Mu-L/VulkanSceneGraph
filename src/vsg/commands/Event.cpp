@@ -12,7 +12,6 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
 #include <vsg/commands/Event.h>
 #include <vsg/core/Exception.h>
-#include <vsg/io/Options.h>
 #include <vsg/vk/CommandBuffer.h>
 
 using namespace vsg;
@@ -76,7 +75,7 @@ void SetEvent::record(CommandBuffer& commandBuffer) const
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 //
-// ReetEvent
+// ResetEvent
 //
 ResetEvent::ResetEvent(ref_ptr<Event> in_event, VkPipelineStageFlags in_stageMask) :
     event(in_event),

@@ -10,11 +10,10 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
 </editor-fold> */
 
+#include <vsg/app/View.h>
 #include <vsg/core/Exception.h>
 #include <vsg/core/compare.h>
-#include <vsg/io/Options.h>
 #include <vsg/state/BindDescriptorSet.h>
-#include <vsg/viewer/View.h>
 #include <vsg/vk/Context.h>
 
 using namespace vsg;
@@ -30,12 +29,22 @@ BindDescriptorSets::BindDescriptorSets() :
 {
 }
 
+BindDescriptorSets::BindDescriptorSets(const BindDescriptorSets& rhs, const CopyOp& copyop) :
+    Inherit(rhs, copyop),
+    pipelineBindPoint(rhs.pipelineBindPoint),
+    layout(copyop(rhs.layout)),
+    firstSet(rhs.firstSet),
+    descriptorSets(copyop(rhs.descriptorSets)),
+    dynamicOffsets(rhs.dynamicOffsets)
+{
+}
+
 int BindDescriptorSets::compare(const Object& rhs_object) const
 {
     int result = StateCommand::compare(rhs_object);
     if (result != 0) return result;
 
-    auto& rhs = static_cast<decltype(*this)>(rhs_object);
+    const auto& rhs = static_cast<decltype(*this)>(rhs_object);
 
     if ((result = compare_value(pipelineBindPoint, rhs.pipelineBindPoint))) return result;
     if ((result = compare_pointer(layout, rhs.layout))) return result;
@@ -120,12 +129,22 @@ BindDescriptorSet::BindDescriptorSet() :
 {
 }
 
+BindDescriptorSet::BindDescriptorSet(const BindDescriptorSet& rhs, const CopyOp& copyop) :
+    Inherit(rhs, copyop),
+    pipelineBindPoint(rhs.pipelineBindPoint),
+    layout(copyop(rhs.layout)),
+    firstSet(rhs.firstSet),
+    descriptorSet(copyop(rhs.descriptorSet)),
+    dynamicOffsets(rhs.dynamicOffsets)
+{
+}
+
 int BindDescriptorSet::compare(const Object& rhs_object) const
 {
     int result = StateCommand::compare(rhs_object);
     if (result != 0) return result;
 
-    auto& rhs = static_cast<decltype(*this)>(rhs_object);
+    const auto& rhs = static_cast<decltype(*this)>(rhs_object);
 
     if ((result = compare_value(pipelineBindPoint, rhs.pipelineBindPoint))) return result;
     if ((result = compare_pointer(layout, rhs.layout))) return result;

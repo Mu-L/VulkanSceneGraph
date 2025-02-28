@@ -42,25 +42,30 @@ namespace vsg
 
         Value() :
             _value{} { dirty(); }
-        Value(const Value& rhs) :
-            Data(rhs), _value(rhs._value) { dirty(); }
+        Value(const Value& rhs, const CopyOp& copyop = {}) :
+            Data(rhs, copyop), _value(rhs._value) { dirty(); }
         explicit Value(const value_type& in_value) :
             _value(in_value) { dirty(); }
 
         template<typename... Args>
         explicit Value(Args&&... args) :
-            _value(args...) { dirty(); }
+            _value(std::forward<Args>(args)...) { dirty(); }
 
         template<typename... Args>
         static ref_ptr<Value> create(Args&&... args)
         {
-            return ref_ptr<Value>(new Value(args...));
+            return ref_ptr<Value>(new Value(std::forward<Args>(args)...));
         }
 
-        std::size_t sizeofObject() const noexcept override { return sizeof(Value); }
+        ref_ptr<Object> clone(const CopyOp& copyop = {}) const override
+        {
+            return ref_ptr<Value>(new Value(*this, copyop));
+        }
+
+        size_t sizeofObject() const noexcept override { return sizeof(Value); }
         const char* className() const noexcept override { return type_name<Value>(); }
         const std::type_info& type_info() const noexcept override { return typeid(*this); }
-        bool is_compatible(const std::type_info& type) const noexcept override { return typeid(Value) == type ? true : Data::is_compatible(type); }
+        bool is_compatible(const std::type_info& type) const noexcept override { return typeid(Value) == type || Data::is_compatible(type); }
 
         // implementation provided by Visitor.h
         void accept(Visitor& visitor) override;
@@ -85,24 +90,44 @@ namespace vsg
                 output.write("Value", _value);
         }
 
-        std::size_t valueSize() const override { return sizeof(value_type); }
-        std::size_t valueCount() const override { return 1; }
+        size_t valueSize() const override
+        {
+            if constexpr (std::is_same_v<T, std::string>)
+                return _value.size();
+            else
+                return sizeof(value_type);
+        }
+        size_t valueCount() const override { return 1; }
 
-        std::size_t dataSize() const override { return sizeof(value_type); }
+        bool dataAvailable() const override { return true; }
+        size_t dataSize() const override { return valueSize(); }
 
-        void* dataPointer() override { return &_value; }
-        const void* dataPointer() const override { return &_value; }
+        void* dataPointer() override
+        {
+            if constexpr (std::is_same_v<T, std::string>)
+                return _value.data();
+            else
+                return &_value;
+        }
 
-        void* dataPointer(size_t) override { return &_value; }
-        const void* dataPointer(size_t) const override { return &_value; }
+        const void* dataPointer() const override
+        {
+            if constexpr (std::is_same_v<T, std::string>)
+                return _value.data();
+            else
+                return &_value;
+        }
+
+        void* dataPointer(size_t) override { return dataPointer(); }
+        const void* dataPointer(size_t) const override { return dataPointer(); }
 
         void* dataRelease() override { return nullptr; }
 
-        std::uint32_t dimensions() const override { return 0; }
+        uint32_t dimensions() const override { return 0; }
 
-        std::uint32_t width() const override { return 1; }
-        std::uint32_t height() const override { return 1; }
-        std::uint32_t depth() const override { return 1; }
+        uint32_t width() const override { return 1; }
+        uint32_t height() const override { return 1; }
+        uint32_t depth() const override { return 1; }
 
         Value& operator=(const Value& rhs)
         {
@@ -134,7 +159,7 @@ namespace vsg
     void Object::setValue(const std::string& key, const T& value)
     {
         using ValueT = Value<T>;
-        setObject(key, new ValueT(value));
+        setObject(key, ValueT::create(value));
     }
 
     template<typename T>
@@ -166,6 +191,8 @@ namespace vsg
     }
 
     VSG_value(stringValue, std::string);
+    VSG_value(wstringValue, std::wstring);
+
     VSG_value(boolValue, bool);
     VSG_value(intValue, int);
     VSG_value(uintValue, unsigned int);
@@ -180,13 +207,25 @@ namespace vsg
     VSG_value(dvec3Value, dvec3);
     VSG_value(dvec4Value, dvec4);
 
+    VSG_value(bvec2Value, bvec2);
+    VSG_value(bvec3Value, bvec3);
+    VSG_value(bvec4Value, bvec4);
+
     VSG_value(ubvec2Value, ubvec2);
     VSG_value(ubvec3Value, ubvec3);
     VSG_value(ubvec4Value, ubvec4);
 
+    VSG_value(svec2Value, svec2);
+    VSG_value(svec3Value, svec3);
+    VSG_value(svec4Value, svec4);
+
     VSG_value(usvec2Value, usvec2);
     VSG_value(usvec3Value, usvec3);
     VSG_value(usvec4Value, usvec4);
+
+    VSG_value(ivec2Value, ivec2);
+    VSG_value(ivec3Value, ivec3);
+    VSG_value(ivec4Value, ivec4);
 
     VSG_value(uivec2Value, uivec2);
     VSG_value(uivec3Value, uivec3);

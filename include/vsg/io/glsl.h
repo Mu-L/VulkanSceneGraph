@@ -37,6 +37,8 @@ namespace vsg
         glsl();
 
         vsg::ref_ptr<vsg::Object> read(const vsg::Path& filename, vsg::ref_ptr<const vsg::Options> options = {}) const override;
+        ref_ptr<vsg::Object> read(std::istream& fin, ref_ptr<const Options> options = {}) const override;
+        ref_ptr<vsg::Object> read(const uint8_t* ptr, size_t size, ref_ptr<const Options> = {}) const override;
 
         bool write(const vsg::Object* object, const vsg::Path& filename, vsg::ref_ptr<const vsg::Options> options = {}) const override;
 
@@ -46,7 +48,7 @@ namespace vsg
         static bool extensionSupported(const vsg::Path& path);
 
     protected:
-        static std::map<vsg::Path, VkShaderStageFlagBits> s_extensionToStage;
+        ref_ptr<Object> createShader(const Path& found_filename, std::string& source, VkShaderStageFlagBits stageFlagBits, vsg::ref_ptr<const vsg::Options> options) const;
     };
     VSG_type_name(vsg::glsl);
 

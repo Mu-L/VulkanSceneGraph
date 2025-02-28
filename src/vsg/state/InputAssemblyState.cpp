@@ -10,7 +10,6 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
 </editor-fold> */
 
-#include <vsg/io/Options.h>
 #include <vsg/state/InputAssemblyState.h>
 #include <vsg/vk/Context.h>
 
@@ -37,9 +36,20 @@ InputAssemblyState::~InputAssemblyState()
 {
 }
 
+int InputAssemblyState::compare(const Object& rhs_object) const
+{
+    int result = GraphicsPipelineState::compare(rhs_object);
+    if (result != 0) return result;
+
+    const auto& rhs = static_cast<decltype(*this)>(rhs_object);
+
+    if ((result = compare_value(topology, rhs.topology))) return result;
+    return compare_value(primitiveRestartEnable, rhs.primitiveRestartEnable);
+}
+
 void InputAssemblyState::read(Input& input)
 {
-    Object::read(input);
+    GraphicsPipelineState::read(input);
 
     input.readValue<uint32_t>("topology", topology);
     primitiveRestartEnable = input.readValue<uint32_t>("primitiveRestartEnable") != 0;
@@ -47,7 +57,7 @@ void InputAssemblyState::read(Input& input)
 
 void InputAssemblyState::write(Output& output) const
 {
-    Object::write(output);
+    GraphicsPipelineState::write(output);
 
     output.writeValue<uint32_t>("topology", topology);
     output.writeValue<uint32_t>("primitiveRestartEnable", primitiveRestartEnable ? 1 : 0);

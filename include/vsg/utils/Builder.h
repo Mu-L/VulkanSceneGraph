@@ -12,11 +12,11 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
 </editor-fold> */
 
+#include <vsg/app/CompileTraversal.h>
 #include <vsg/maths/box.h>
 #include <vsg/maths/sphere.h>
 #include <vsg/utils/ShaderSet.h>
 #include <vsg/utils/SharedObjects.h>
-#include <vsg/viewer/CompileTraversal.h>
 
 namespace vsg
 {
@@ -30,11 +30,22 @@ namespace vsg
         bool greyscale = false; /// greyscale image
         bool wireframe = false;
         bool instance_colors_vec4 = true;
-        bool instance_positions_vec3 = false;
+        bool instance_positions_vec3 = false; // user must assign GeometryInfo::positions with vec3Array containing positions
+        bool billboard = false;               // user must assign GeometryInfo::positions with vec4Array containing position_scaleDistance, overrides instance_positions_vec3 setting
 
         ref_ptr<Data> image;
         ref_ptr<Data> displacementMap;
         ref_ptr<DescriptorSetLayout> viewDescriptorSetLayout;
+
+        bool operator<(const StateInfo& rhs) const
+        {
+            int result = compare_region(lighting, billboard, rhs.lighting);
+            if (result) return result < 0;
+
+            if ((result = compare_pointer(image, rhs.image))) return result < 0;
+            if ((result = compare_pointer(displacementMap, rhs.displacementMap))) return result < 0;
+            return compare_pointer(viewDescriptorSetLayout, rhs.viewDescriptorSetLayout) < 0;
+        }
     };
     VSG_type_name(vsg::StateInfo);
 
@@ -56,6 +67,9 @@ namespace vsg
         vec4 color = {1.0f, 1.0f, 1.0f, 1.0f};
         mat4 transform;
 
+        /// cullNode flag indicates whether a CullNode should decorate the creted subgraph
+        bool cullNode = false;
+
         template<typename T>
         void set(const t_box<T>& bb)
         {
@@ -74,8 +88,8 @@ namespace vsg
             dz.set(0.0f, 0.0f, sp.radius * 2.0f);
         }
 
-        /// used for instancing
-        ref_ptr<vec3Array> positions;
+        /// when using geometry instancing use vec3Array with vec3{x,y,z} and for billboards use vec4Array with vec4{x,y,z,scaleDistance}
+        ref_ptr<Data> positions;
         ref_ptr<Data> colors;
 
         bool operator<(const GeometryInfo& rhs) const
@@ -91,10 +105,16 @@ namespace vsg
 
     /// Builder class that creates subgraphs that can render primitive geometries.
     /// Supported shapes are Box, Capsule, Cone, Cylinder, Disk, Quad, Sphere and HeightField.
-    /// Uses GeometryInfo and StateInfo to guide the geometry position/size and rendering state.
+    /// Uses GeometryInfo and StateInfo to guide the geometry's position/size and rendering state.
     class VSG_DECLSPEC Builder : public Inherit<Object, Builder>
     {
     public:
+        Builder();
+        Builder(const Builder& rhs) = delete;
+        Builder& operator=(const Builder& rhs) = delete;
+
+        ~Builder();
+
         bool verbose = false;
         ref_ptr<Options> options;
         ref_ptr<SharedObjects> sharedObjects;
@@ -116,16 +136,23 @@ namespace vsg
 
         ref_ptr<CompileTraversal> compileTraversal;
 
-    private:
+    protected:
         void transform(const mat4& matrix, ref_ptr<vec3Array> vertices, ref_ptr<vec3Array> normals);
-
+        ref_ptr<Data> instancePositions(const GeometryInfo& info, uint32_t& instanceCount);
+        ref_ptr<Data> instanceColors(const GeometryInfo& info, uint32_t instanceCount);
         vec3 y_texcoord(const StateInfo& info) const;
 
-        using GeometryMap = std::map<GeometryInfo, ref_ptr<Node>>;
+        ref_ptr<Node> decorateAndCompileIfRequired(const GeometryInfo& info, const StateInfo& stateInfo, ref_ptr<Node> node);
+
+        ref_ptr<ShaderSet> _flatShadedShaderSet;
+        ref_ptr<ShaderSet> _phongShaderSet;
+
+        using GeometryMap = std::map<std::pair<GeometryInfo, StateInfo>, ref_ptr<Node>>;
         GeometryMap _boxes;
         GeometryMap _capsules;
         GeometryMap _cones;
         GeometryMap _cylinders;
+        GeometryMap _disks;
         GeometryMap _quads;
         GeometryMap _spheres;
         GeometryMap _heightfields;

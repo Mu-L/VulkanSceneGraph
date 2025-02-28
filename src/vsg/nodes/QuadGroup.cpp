@@ -10,11 +10,9 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
 </editor-fold> */
 
-#include <vsg/nodes/QuadGroup.h>
-
 #include <vsg/io/Input.h>
-#include <vsg/io/Options.h>
 #include <vsg/io/Output.h>
+#include <vsg/nodes/QuadGroup.h>
 
 using namespace vsg;
 
@@ -22,8 +20,26 @@ QuadGroup::QuadGroup()
 {
 }
 
+QuadGroup::QuadGroup(const QuadGroup& rhs, const CopyOp& copyop) :
+    Inherit(rhs, copyop)
+{
+    children[0] = copyop(rhs.children[0]);
+    children[1] = copyop(rhs.children[1]);
+    children[2] = copyop(rhs.children[2]);
+    children[3] = copyop(rhs.children[3]);
+}
+
 QuadGroup::~QuadGroup()
 {
+}
+
+int QuadGroup::compare(const Object& rhs_object) const
+{
+    int result = Object::compare(rhs_object);
+    if (result != 0) return result;
+
+    const auto& rhs = static_cast<decltype(*this)>(rhs_object);
+    return compare_pointer_container(children, rhs.children);
 }
 
 void QuadGroup::read(Input& input)
@@ -40,7 +56,7 @@ void QuadGroup::write(Output& output) const
 {
     Node::write(output);
 
-    for (auto& child : children)
+    for (const auto& child : children)
     {
         output.writeObject("Child", child.get());
     }

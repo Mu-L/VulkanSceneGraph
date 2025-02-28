@@ -21,7 +21,6 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 #include <vsg/io/Logger.h>
 #include <vsg/ui/KeyEvent.h>
 #include <vsg/ui/TouchEvent.h>
-#include <vsg/vk/Extensions.h>
 
 #include <time.h>
 
@@ -55,7 +54,7 @@ namespace vsgAndroid
             auto result = vkCreateAndroidSurfaceKHR(*instance, &surfaceCreateInfo, _instance->getAllocationCallbacks(), &_surface);
             if (result != VK_SUCCESS)
             {
-                throw Exception{"Failed to created AndroidSurface.", result};
+                throw Exception{"Failed to create AndroidSurface.", result};
             }
         }
     };
@@ -255,7 +254,7 @@ KeyboardMap::KeyboardMap()
 
             /*
         * Auxiliary Functions; note the duplicate definitions for left and right
-        * function keys;  Sun keyboards and a few other manufactures have such
+        * function keys;  Sun keyboards and a few other manufacturers have such
         * function key groups on the left and/or right sides of the keyboard.
         * We've not found a keyboard with more than 35 function keys total.
         */
@@ -322,25 +321,30 @@ Android_Window::Android_Window(vsg::ref_ptr<WindowTraits> traits) :
 {
     _keyboard = new KeyboardMap;
 
-    ANativeWindow* nativeWindow = std::any_cast<ANativeWindow*>(traits->nativeWindow);
-
-    if (nativeWindow == nullptr)
+    if (!traits->getValue("nativeWindow", _window))
     {
-        throw Exception{"Error: vsg::Android_Window::Android_Window(...) failed to create Window, traits->nativeHandle is not a valid ANativeWindow.", VK_ERROR_INVALID_EXTERNAL_HANDLE};
+        vsg::log(vsg::Logger::LOGGER_WARN, "Value 'nativeWindow' not provided on WindowTraits object. Falling back to std::any_cast<ANativeWindow*> for Android window setup.");
     }
 
-    _window = nativeWindow;
+    if (_window == nullptr)
+    {
+        ANativeWindow* nativeWindow = std::any_cast<ANativeWindow*>(traits->nativeWindow);
 
-    // we could get the width height from the window?
+        if (nativeWindow == nullptr)
+        {
+            throw Exception{"Error: vsg::Android_Window::Android_Window(...) failed to create Window, traits->nativeHandle is not a valid ANativeWindow.", VK_ERROR_INVALID_EXTERNAL_HANDLE};
+        }
+
+        _window = nativeWindow;
+    }
+
+    // we could get the width and height from the window?
     uint32_t finalWidth = traits->width;
     uint32_t finalHeight = traits->height;
 
-    vsg::ref_ptr<Android_Window> window;
-
-    if (traits->shareWindow)
+    if (traits->device)
     {
-        // share the _instance, _physicalDevice and _device;
-        window->share(*traits->shareWindow);
+        share(traits->device);
     }
 
     _extent2D.width = finalWidth;
@@ -372,7 +376,7 @@ void Android_Window::resize()
     _extent2D.width = ANativeWindow_getWidth(_window);
     _extent2D.height = ANativeWindow_getHeight(_window);
 
-    vsg::debug("resize event = wh: ", _extent2D.width, ", ",_extent2D.height);
+    vsg::debug("resize event = wh: ", _extent2D.width, ", ", _extent2D.height);
 
     buildSwapchain();
 }
@@ -466,18 +470,18 @@ bool Android_Window::handleAndroidInputEvent(AInputEvent* anEvent)
 
         switch (action)
         {
-            case AKEY_EVENT_ACTION_DOWN:
-                vsg::debug("key down event = unmodified: ", int32_t(keySymbol), " modified: ", int32_t(modifiedKeySymbol));
-                bufferedEvents.emplace_back(vsg::KeyPressEvent::create(this, event_time, keySymbol, modifiedKeySymbol, keyModifier));
-                break;
-            case AKEY_EVENT_ACTION_UP:
-                vsg::debug("key up event = unmodified: ", int32_t(keySymbol), " modified: ", int32_t(modifiedKeySymbol));
-                bufferedEvents.emplace_back(vsg::KeyReleaseEvent::create(this, event_time, keySymbol, modifiedKeySymbol, keyModifier));
-                break;
-                //case AKEY_EVENT_ACTION_MULTIPLE:
-                //   bufferedEvents.emplace_back(new vsg::KeyPressEvent(this, event_time, keySymbol, modifiedKeySymbol, keyModifier);
-                //   break;
-            default: break;
+        case AKEY_EVENT_ACTION_DOWN:
+            vsg::debug("key down event = unmodified: ", int32_t(keySymbol), " modified: ", int32_t(modifiedKeySymbol));
+            bufferedEvents.emplace_back(vsg::KeyPressEvent::create(this, event_time, keySymbol, modifiedKeySymbol, keyModifier));
+            break;
+        case AKEY_EVENT_ACTION_UP:
+            vsg::debug("key up event = unmodified: ", int32_t(keySymbol), " modified: ", int32_t(modifiedKeySymbol));
+            bufferedEvents.emplace_back(vsg::KeyReleaseEvent::create(this, event_time, keySymbol, modifiedKeySymbol, keyModifier));
+            break;
+            //case AKEY_EVENT_ACTION_MULTIPLE:
+            //   bufferedEvents.emplace_back(new vsg::KeyPressEvent(this, event_time, keySymbol, modifiedKeySymbol, keyModifier);
+            //   break;
+        default: break;
         }
         return true;
     }

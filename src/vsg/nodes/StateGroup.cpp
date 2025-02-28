@@ -12,13 +12,19 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
 #include <vsg/core/compare.h>
 #include <vsg/io/Input.h>
-#include <vsg/io/Options.h>
 #include <vsg/io/Output.h>
 #include <vsg/nodes/StateGroup.h>
 
 using namespace vsg;
 
 StateGroup::StateGroup()
+{
+}
+
+StateGroup::StateGroup(const StateGroup& rhs, const CopyOp& copyop) :
+    Inherit(rhs, copyop),
+    stateCommands(copyop(rhs.stateCommands)),
+    prototypeArrayState(rhs.prototypeArrayState)
 {
 }
 
@@ -31,7 +37,7 @@ int StateGroup::compare(const Object& rhs_object) const
     int result = Group::compare(rhs_object);
     if (result != 0) return result;
 
-    auto& rhs = static_cast<decltype(*this)>(rhs_object);
+    const auto& rhs = static_cast<decltype(*this)>(rhs_object);
     if ((result = compare_pointer_container(stateCommands, rhs.stateCommands))) return result;
     return compare_pointer(prototypeArrayState, rhs.prototypeArrayState);
 }
@@ -50,12 +56,4 @@ void StateGroup::write(Output& output) const
 
     output.writeObjects("stateCommands", stateCommands);
     output.write("prototypeArrayState", prototypeArrayState);
-}
-
-void StateGroup::compile(Context& context)
-{
-    for (auto& stateCommand : stateCommands)
-    {
-        stateCommand->compile(context);
-    }
 }

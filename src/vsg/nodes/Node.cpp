@@ -11,12 +11,16 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 </editor-fold> */
 
 #include <vsg/core/Allocator.h>
-#include <vsg/io/Options.h>
 #include <vsg/nodes/Node.h>
 
 using namespace vsg;
 
 Node::Node()
+{
+}
+
+Node::Node(const Node& rhs, const CopyOp& copyop) :
+    Inherit(rhs, copyop)
 {
 }
 

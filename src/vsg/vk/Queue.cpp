@@ -10,14 +10,14 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
 </editor-fold> */
 
-#include <vsg/io/Options.h>
 #include <vsg/vk/Fence.h>
 #include <vsg/vk/Queue.h>
 
 using namespace vsg;
 
-Queue::Queue(VkQueue queue, uint32_t queueFamilyIndex, uint32_t queueIndex) :
+Queue::Queue(VkQueue queue, VkQueueFlags queueFlags, uint32_t queueFamilyIndex, uint32_t queueIndex) :
     _vkQueue(queue),
+    _queueFlags(queueFlags),
     _queueFamilyIndex(queueFamilyIndex),
     _queueIndex(queueIndex)
 {

@@ -26,7 +26,7 @@ namespace vsg
         using NodePath = std::vector<const Node*>;
         using ArrayStateStack = std::vector<ref_ptr<ArrayState>>;
 
-        Intersector(ref_ptr<ArrayState> intialArrayState = {});
+        Intersector(ref_ptr<ArrayState> initialArrayState = {});
 
         //
         // handle traverse of the scene graph
@@ -37,7 +37,10 @@ namespace vsg
         void apply(const LOD& lod) override;
         void apply(const PagedLOD& plod) override;
         void apply(const CullNode& cn) override;
+        void apply(const CullGroup& cn) override;
+        void apply(const DepthSorted& cn) override;
 
+        void apply(const VertexDraw& vid) override;
         void apply(const VertexIndexDraw& vid) override;
         void apply(const Geometry& geometry) override;
 
@@ -50,6 +53,8 @@ namespace vsg
         void apply(const ushortArray& array) override;
         void apply(const uintArray& array) override;
 
+        void apply(const TextTechnique& technique) override;
+
         //
         // provide virtual functions for concrete Intersector implementations to provide handling of intersection with mesh geometries
         //
@@ -59,7 +64,7 @@ namespace vsg
 
         virtual void popTransform() = 0;
 
-        /// check for intersection intersects with sphere
+        /// check for intersection with sphere
         virtual bool intersects(const dsphere& sphere) = 0;
 
         /// intersect with a vkCmdDraw primitive
@@ -68,8 +73,13 @@ namespace vsg
         /// intersect with a vkCmdDrawIndexed primitive
         virtual bool intersectDrawIndexed(uint32_t firstIndex, uint32_t indexCount, uint32_t firstInstance, uint32_t instanceCount) = 0;
 
+        /// get the current local to world matrix stack
+        std::vector<dmat4>& localToWorldStack() { return arrayStateStack.back()->localToWorldStack; }
+
+        /// get the current world to local matrix stack
+        std::vector<dmat4>& worldToLocalStack() { return arrayStateStack.back()->worldToLocalStack; }
+
     protected:
-        std::vector<dmat4> _matrixStack;
         ArrayStateStack arrayStateStack;
 
         ref_ptr<const ushortArray> ushort_indices;

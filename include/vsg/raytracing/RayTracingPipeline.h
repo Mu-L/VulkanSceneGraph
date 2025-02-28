@@ -65,7 +65,6 @@ namespace vsg
 
             VkPipeline _pipeline;
 
-            // TODO need to convert to use Implementation versions of RenderPass and PipelineLayout
             ref_ptr<Device> _device;
             ref_ptr<PipelineLayout> _pipelineLayout;
             ShaderStages _shaderStages;
@@ -85,7 +84,7 @@ namespace vsg
     class VSG_DECLSPEC BindRayTracingPipeline : public Inherit<StateCommand, BindRayTracingPipeline>
     {
     public:
-        BindRayTracingPipeline(RayTracingPipeline* pipeline = nullptr);
+        explicit BindRayTracingPipeline(RayTracingPipeline* pipeline = nullptr);
 
         int compare(const Object& rhs_object) const override;
 

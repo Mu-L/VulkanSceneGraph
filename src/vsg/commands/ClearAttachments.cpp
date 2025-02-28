@@ -11,7 +11,6 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 </editor-fold> */
 
 #include <vsg/commands/ClearAttachments.h>
-#include <vsg/io/Options.h>
 #include <vsg/vk/CommandBuffer.h>
 
 using namespace vsg;
@@ -24,6 +23,48 @@ ClearAttachments::ClearAttachments(const Attachments& in_attachments, const Rect
     attachments(in_attachments),
     rects(in_rects)
 {
+}
+
+void ClearAttachments::read(Input& input)
+{
+    Command::read(input);
+
+    attachments.resize(input.readValue<uint32_t>("attachments"));
+    for (auto& attachment : attachments)
+    {
+        input.readValue<uint32_t>("aspectMask", attachment.aspectMask);
+        input.read("colorAttachment", attachment.colorAttachment);
+        input.read("clearValue", attachment.clearValue);
+    }
+
+    rects.resize(input.readValue<uint32_t>("rects"));
+    for (auto& r : rects)
+    {
+        input.read("rect", r.rect.offset.x, r.rect.offset.y, r.rect.extent.width, r.rect.extent.height);
+        input.read("baseArrayLayer", r.baseArrayLayer);
+        input.read("layerCount", r.layerCount);
+    }
+}
+
+void ClearAttachments::write(Output& output) const
+{
+    Command::write(output);
+
+    output.writeValue<uint32_t>("attachments", attachments.size());
+    for (auto& attachment : attachments)
+    {
+        output.writeValue<uint32_t>("aspectMask", attachment.aspectMask);
+        output.write("colorAttachment", attachment.colorAttachment);
+        output.write("clearValue", attachment.clearValue);
+    }
+
+    output.writeValue<uint32_t>("rects", rects.size());
+    for (auto& r : rects)
+    {
+        output.write("rect", r.rect.offset.x, r.rect.offset.y, r.rect.extent.width, r.rect.extent.height);
+        output.write("baseArrayLayer", r.baseArrayLayer);
+        output.write("layerCount", r.layerCount);
+    }
 }
 
 void ClearAttachments::record(CommandBuffer& commandBuffer) const

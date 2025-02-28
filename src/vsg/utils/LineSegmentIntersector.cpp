@@ -10,7 +10,6 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
 </editor-fold> */
 
-#include <vsg/io/Options.h>
 #include <vsg/nodes/Transform.h>
 #include <vsg/utils/LineSegmentIntersector.h>
 
@@ -123,8 +122,6 @@ struct TriangleIntersector
             return false;
         }
 
-        // TODO : handle hit
-
         dvec3 intersection = dvec3(dvec3(v0) * double(r0) + dvec3(v1) * double(r1) + dvec3(v2) * double(r2));
         intersector.add(intersection, double(r), {{i0, r0}, {i1, r1}, {i2, r2}}, instanceIndex);
 
@@ -151,17 +148,21 @@ LineSegmentIntersector::LineSegmentIntersector(const Camera& camera, int32_t x, 
 
     auto projectionMatrix = camera.projectionMatrix->transform();
     auto viewMatrix = camera.viewMatrix->transform();
-    auto inv_projectionViewMatrix = vsg::inverse(projectionMatrix * viewMatrix);
 
     bool reverse_depth = (projectionMatrix(2, 2) > 0.0);
 
     vsg::dvec3 ndc_near(ndc.x * 2.0 - 1.0, ndc.y * 2.0 - 1.0, reverse_depth ? viewport.maxDepth : viewport.minDepth);
     vsg::dvec3 ndc_far(ndc.x * 2.0 - 1.0, ndc.y * 2.0 - 1.0, reverse_depth ? viewport.minDepth : viewport.maxDepth);
 
-    vsg::dvec3 world_near = inv_projectionViewMatrix * ndc_near;
-    vsg::dvec3 world_far = inv_projectionViewMatrix * ndc_far;
+    auto inv_projectionMatrix = vsg::inverse(projectionMatrix);
+    vsg::dvec3 eye_near = inv_projectionMatrix * ndc_near;
+    vsg::dvec3 eye_far = inv_projectionMatrix * ndc_far;
+    _lineSegmentStack.push_back(LineSegment{eye_near, eye_far});
 
-    _lineSegmentStack.push_back(LineSegment{world_near, world_far});
+    dmat4 eyeToWorld = inverse(viewMatrix);
+    localToWorldStack().push_back(viewMatrix);
+    worldToLocalStack().push_back(eyeToWorld);
+    _lineSegmentStack.push_back(LineSegment{eyeToWorld * eye_near, eyeToWorld * eye_far});
 }
 
 LineSegmentIntersector::Intersection::Intersection(const dvec3& in_localIntersection, const dvec3& in_worldIntersection, double in_ratio, const dmat4& in_localToWorld, const NodePath& in_nodePath, const DataList& in_arrays, const IndexRatios& in_indexRatios, uint32_t in_instanceIndex) :
@@ -179,28 +180,24 @@ LineSegmentIntersector::Intersection::Intersection(const dvec3& in_localIntersec
 ref_ptr<LineSegmentIntersector::Intersection> LineSegmentIntersector::add(const dvec3& coord, double ratio, const IndexRatios& indexRatios, uint32_t instanceIndex)
 {
     ref_ptr<Intersection> intersection;
-    if (_matrixStack.empty())
-    {
-        dmat4 m;
-        intersection = Intersection::create(coord, coord, ratio, m, _nodePath, arrayStateStack.back()->arrays, indexRatios, instanceIndex);
-        intersections.emplace_back(intersection);
-    }
-    else
-    {
-        auto& localToWorld = _matrixStack.back();
-        intersection = Intersection::create(coord, localToWorld * coord, ratio, localToWorld, _nodePath, arrayStateStack.back()->arrays, indexRatios, instanceIndex);
-        intersections.emplace_back(intersection);
-    }
+
+    auto localToWorld = computeTransform(_nodePath);
+    intersection = Intersection::create(coord, localToWorld * coord, ratio, localToWorld, _nodePath, arrayStateStack.back()->arrays, indexRatios, instanceIndex);
+    intersections.emplace_back(intersection);
 
     return intersection;
 }
 
 void LineSegmentIntersector::pushTransform(const Transform& transform)
 {
-    dmat4 localToWorld = _matrixStack.empty() ? transform.transform(dmat4{}) : transform.transform(_matrixStack.back());
+    auto& l2wStack = localToWorldStack();
+    auto& w2lStack = worldToLocalStack();
+
+    dmat4 localToWorld = l2wStack.empty() ? transform.transform(dmat4{}) : transform.transform(l2wStack.back());
     dmat4 worldToLocal = inverse(localToWorld);
 
-    _matrixStack.push_back(localToWorld);
+    l2wStack.push_back(localToWorld);
+    w2lStack.push_back(worldToLocal);
 
     const auto& worldLineSegment = _lineSegmentStack.front();
     _lineSegmentStack.push_back(LineSegment{worldToLocal * worldLineSegment.start, worldToLocal * worldLineSegment.end});
@@ -209,7 +206,8 @@ void LineSegmentIntersector::pushTransform(const Transform& transform)
 void LineSegmentIntersector::popTransform()
 {
     _lineSegmentStack.pop_back();
-    _matrixStack.pop_back();
+    localToWorldStack().pop_back();
+    worldToLocalStack().pop_back();
 }
 
 bool LineSegmentIntersector::intersects(const dsphere& bs)
@@ -257,14 +255,14 @@ bool LineSegmentIntersector::intersectDraw(uint32_t firstVertex, uint32_t vertex
     uint32_t lastIndex = instanceCount > 1 ? (firstInstance + instanceCount) : firstInstance + 1;
     for (uint32_t instanceIndex = firstInstance; instanceIndex < lastIndex; ++instanceIndex)
     {
-        TriangleIntersector<double> triIntsector(*this, ls.start, ls.end, arrayState.vertexArray(instanceIndex));
-        if (!triIntsector.vertices) return false;
+        TriangleIntersector<double> triIntersector(*this, ls.start, ls.end, arrayState.vertexArray(instanceIndex));
+        if (!triIntersector.vertices) return false;
 
         uint32_t endVertex = int((firstVertex + vertexCount) / 3.0f) * 3;
 
         for (uint32_t i = firstVertex; i < endVertex; i += 3)
         {
-            triIntsector.intersect(i, i + 1, i + 2);
+            triIntersector.intersect(i, i + 1, i + 2);
         }
     }
 
@@ -282,10 +280,10 @@ bool LineSegmentIntersector::intersectDrawIndexed(uint32_t firstIndex, uint32_t 
     uint32_t lastIndex = instanceCount > 1 ? (firstInstance + instanceCount) : firstInstance + 1;
     for (uint32_t instanceIndex = firstInstance; instanceIndex < lastIndex; ++instanceIndex)
     {
-        TriangleIntersector<double> triIntsector(*this, ls.start, ls.end, arrayState.vertexArray(instanceIndex));
-        if (!triIntsector.vertices) continue;
+        TriangleIntersector<double> triIntersector(*this, ls.start, ls.end, arrayState.vertexArray(instanceIndex));
+        if (!triIntersector.vertices) continue;
 
-        triIntsector.instanceIndex = instanceIndex;
+        triIntersector.instanceIndex = instanceIndex;
 
         uint32_t endIndex = int((firstIndex + indexCount) / 3.0f) * 3;
 
@@ -293,14 +291,14 @@ bool LineSegmentIntersector::intersectDrawIndexed(uint32_t firstIndex, uint32_t 
         {
             for (uint32_t i = firstIndex; i < endIndex; i += 3)
             {
-                triIntsector.intersect(ushort_indices->at(i), ushort_indices->at(i + 1), ushort_indices->at(i + 2));
+                triIntersector.intersect(ushort_indices->at(i), ushort_indices->at(i + 1), ushort_indices->at(i + 2));
             }
         }
         else if (uint_indices)
         {
             for (uint32_t i = firstIndex; i < endIndex; i += 3)
             {
-                triIntsector.intersect(uint_indices->at(i), uint_indices->at(i + 1), uint_indices->at(i + 2));
+                triIntersector.intersect(uint_indices->at(i), uint_indices->at(i + 1), uint_indices->at(i + 2));
             }
         }
     }

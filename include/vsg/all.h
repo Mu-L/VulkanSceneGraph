@@ -24,6 +24,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 #include <vsg/core/Export.h>
 #include <vsg/core/External.h>
 #include <vsg/core/Inherit.h>
+#include <vsg/core/IntrusiveAllocator.h>
 #include <vsg/core/Mask.h>
 #include <vsg/core/MemorySlots.h>
 #include <vsg/core/Object.h>
@@ -33,6 +34,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 #include <vsg/core/Version.h>
 #include <vsg/core/Visitor.h>
 #include <vsg/core/compare.h>
+#include <vsg/core/contains.h>
 #include <vsg/core/observer_ptr.h>
 #include <vsg/core/ref_ptr.h>
 #include <vsg/core/type_name.h>
@@ -57,17 +59,21 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 // Node header files
 #include <vsg/nodes/AbsoluteTransform.h>
 #include <vsg/nodes/Bin.h>
+#include <vsg/nodes/Compilable.h>
+#include <vsg/nodes/CoordinateFrame.h>
 #include <vsg/nodes/CullGroup.h>
 #include <vsg/nodes/CullNode.h>
 #include <vsg/nodes/DepthSorted.h>
 #include <vsg/nodes/Geometry.h>
 #include <vsg/nodes/Group.h>
+#include <vsg/nodes/InstrumentationNode.h>
 #include <vsg/nodes/LOD.h>
-#include <vsg/nodes/Light.h>
+#include <vsg/nodes/Layer.h>
 #include <vsg/nodes/MatrixTransform.h>
 #include <vsg/nodes/Node.h>
 #include <vsg/nodes/PagedLOD.h>
 #include <vsg/nodes/QuadGroup.h>
+#include <vsg/nodes/RegionOfInterest.h>
 #include <vsg/nodes/StateGroup.h>
 #include <vsg/nodes/Switch.h>
 #include <vsg/nodes/TileDatabase.h>
@@ -75,12 +81,37 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 #include <vsg/nodes/VertexDraw.h>
 #include <vsg/nodes/VertexIndexDraw.h>
 
+// Animation header files
+#include <vsg/animation/Animation.h>
+#include <vsg/animation/AnimationGroup.h>
+#include <vsg/animation/AnimationManager.h>
+#include <vsg/animation/CameraAnimationHandler.h>
+#include <vsg/animation/CameraSampler.h>
+#include <vsg/animation/FindAnimations.h>
+#include <vsg/animation/Joint.h>
+#include <vsg/animation/JointSampler.h>
+#include <vsg/animation/MorphSampler.h>
+#include <vsg/animation/TransformSampler.h>
+#include <vsg/animation/time_value.h>
+
+// Lighting header files
+#include <vsg/lighting/AmbientLight.h>
+#include <vsg/lighting/DirectionalLight.h>
+#include <vsg/lighting/HardShadows.h>
+#include <vsg/lighting/Light.h>
+#include <vsg/lighting/PercentageCloserSoftShadows.h>
+#include <vsg/lighting/PointLight.h>
+#include <vsg/lighting/ShadowSettings.h>
+#include <vsg/lighting/SoftShadows.h>
+#include <vsg/lighting/SpotLight.h>
+
 // Commands header files
 #include <vsg/commands/BeginQuery.h>
 #include <vsg/commands/BindIndexBuffer.h>
 #include <vsg/commands/BindVertexBuffers.h>
 #include <vsg/commands/BlitImage.h>
 #include <vsg/commands/ClearAttachments.h>
+#include <vsg/commands/ClearImage.h>
 #include <vsg/commands/Command.h>
 #include <vsg/commands/Commands.h>
 #include <vsg/commands/CopyAndReleaseBuffer.h>
@@ -104,6 +135,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 #include <vsg/commands/ResolveImage.h>
 #include <vsg/commands/SetDepthBias.h>
 #include <vsg/commands/SetLineWidth.h>
+#include <vsg/commands/SetPrimitiveTopology.h>
 #include <vsg/commands/SetScissor.h>
 #include <vsg/commands/SetViewport.h>
 #include <vsg/commands/WriteTimestamp.h>
@@ -150,6 +182,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 #include <vsg/threading/ActivityStatus.h>
 #include <vsg/threading/Affinity.h>
 #include <vsg/threading/Barrier.h>
+#include <vsg/threading/DeleteQueue.h>
 #include <vsg/threading/FrameBlock.h>
 #include <vsg/threading/Latch.h>
 #include <vsg/threading/OperationQueue.h>
@@ -161,6 +194,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 #include <vsg/ui/CollectEvents.h>
 #include <vsg/ui/FrameStamp.h>
 #include <vsg/ui/KeyEvent.h>
+#include <vsg/ui/Keyboard.h>
 #include <vsg/ui/PlayEvents.h>
 #include <vsg/ui/PointerEvent.h>
 #include <vsg/ui/PrintEvents.h>
@@ -171,29 +205,29 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 #include <vsg/ui/UIEvent.h>
 #include <vsg/ui/WindowEvent.h>
 
-// Viewer header files
-#include <vsg/viewer/Camera.h>
-#include <vsg/viewer/CloseHandler.h>
-#include <vsg/viewer/CommandGraph.h>
-#include <vsg/viewer/CompileManager.h>
-#include <vsg/viewer/CompileTraversal.h>
-#include <vsg/viewer/EllipsoidModel.h>
-#include <vsg/viewer/Presentation.h>
-#include <vsg/viewer/ProjectionMatrix.h>
-#include <vsg/viewer/RecordAndSubmitTask.h>
-#include <vsg/viewer/RecordTraversal.h>
-#include <vsg/viewer/RenderGraph.h>
-#include <vsg/viewer/SecondaryCommandGraph.h>
-#include <vsg/viewer/Trackball.h>
-#include <vsg/viewer/TransferTask.h>
-#include <vsg/viewer/UpdateOperations.h>
-#include <vsg/viewer/View.h>
-#include <vsg/viewer/ViewMatrix.h>
-#include <vsg/viewer/Viewer.h>
-#include <vsg/viewer/Window.h>
-#include <vsg/viewer/WindowAdapter.h>
-#include <vsg/viewer/WindowResizeHandler.h>
-#include <vsg/viewer/WindowTraits.h>
+// Application header files
+#include <vsg/app/Camera.h>
+#include <vsg/app/CloseHandler.h>
+#include <vsg/app/CommandGraph.h>
+#include <vsg/app/CompileManager.h>
+#include <vsg/app/CompileTraversal.h>
+#include <vsg/app/EllipsoidModel.h>
+#include <vsg/app/Presentation.h>
+#include <vsg/app/ProjectionMatrix.h>
+#include <vsg/app/RecordAndSubmitTask.h>
+#include <vsg/app/RecordTraversal.h>
+#include <vsg/app/RenderGraph.h>
+#include <vsg/app/SecondaryCommandGraph.h>
+#include <vsg/app/Trackball.h>
+#include <vsg/app/TransferTask.h>
+#include <vsg/app/UpdateOperations.h>
+#include <vsg/app/View.h>
+#include <vsg/app/ViewMatrix.h>
+#include <vsg/app/Viewer.h>
+#include <vsg/app/Window.h>
+#include <vsg/app/WindowAdapter.h>
+#include <vsg/app/WindowResizeHandler.h>
+#include <vsg/app/WindowTraits.h>
 
 // Vulkan related header files
 #include <vsg/vk/AllocationCallbacks.h>
@@ -201,13 +235,15 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 #include <vsg/vk/CommandPool.h>
 #include <vsg/vk/Context.h>
 #include <vsg/vk/DescriptorPool.h>
+#include <vsg/vk/DescriptorPools.h>
 #include <vsg/vk/Device.h>
+#include <vsg/vk/DeviceExtensions.h>
 #include <vsg/vk/DeviceFeatures.h>
 #include <vsg/vk/DeviceMemory.h>
-#include <vsg/vk/Extensions.h>
 #include <vsg/vk/Fence.h>
 #include <vsg/vk/Framebuffer.h>
 #include <vsg/vk/Instance.h>
+#include <vsg/vk/InstanceExtensions.h>
 #include <vsg/vk/MemoryBufferPools.h>
 #include <vsg/vk/PhysicalDevice.h>
 #include <vsg/vk/Queue.h>
@@ -244,17 +280,25 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 #include <vsg/io/spirv.h>
 #include <vsg/io/stream.h>
 #include <vsg/io/tile.h>
+#include <vsg/io/txt.h>
 #include <vsg/io/write.h>
 
 // Utility header files
-#include <vsg/utils/AnimationPath.h>
 #include <vsg/utils/Builder.h>
 #include <vsg/utils/CommandLine.h>
 #include <vsg/utils/ComputeBounds.h>
-#include <vsg/utils/GraphicsPipelineConfig.h>
+#include <vsg/utils/CoordinateSpace.h>
+#include <vsg/utils/FindDynamicObjects.h>
+#include <vsg/utils/GpuAnnotation.h>
+#include <vsg/utils/GraphicsPipelineConfigurator.h>
+#include <vsg/utils/Instrumentation.h>
 #include <vsg/utils/Intersector.h>
 #include <vsg/utils/LineSegmentIntersector.h>
 #include <vsg/utils/LoadPagedLOD.h>
+#include <vsg/utils/PolytopeIntersector.h>
+#include <vsg/utils/PrimitiveFunctor.h>
+#include <vsg/utils/Profiler.h>
+#include <vsg/utils/PropagateDynamicObjects.h>
 #include <vsg/utils/ShaderCompiler.h>
 #include <vsg/utils/ShaderSet.h>
 #include <vsg/utils/SharedObjects.h>
@@ -281,8 +325,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 #include <vsg/raytracing/TopLevelAccelerationStructure.h>
 #include <vsg/raytracing/TraceRays.h>
 
-// RTX mesh  header files
-#include <vsg/rtx/DrawMeshTasks.h>
-#include <vsg/rtx/DrawMeshTasksIndirect.h>
-#include <vsg/rtx/DrawMeshTasksIndirectCommand.h>
-#include <vsg/rtx/DrawMeshTasksIndirectCount.h>
+// Mesh shader header files
+#include <vsg/meshshaders/DrawMeshTasks.h>
+#include <vsg/meshshaders/DrawMeshTasksIndirect.h>
+#include <vsg/meshshaders/DrawMeshTasksIndirectCount.h>

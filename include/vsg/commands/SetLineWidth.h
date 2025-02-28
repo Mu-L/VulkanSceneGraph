@@ -17,11 +17,11 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 namespace vsg
 {
 
-    /// SetLineWidth command encapsulates vkCmdLineWidth functionality, associated with dynamic updating a GraphicsPipeline's RasterizationState.lineWidth
+    /// SetLineWidth command encapsulates vkCmdSetLineWidth functionality, associated with dynamic updating of a GraphicsPipeline's RasterizationState::lineWidth
     class VSG_DECLSPEC SetLineWidth : public Inherit<Command, SetLineWidth>
     {
     public:
-        SetLineWidth(float in_lineWidth = 0.0f);
+        explicit SetLineWidth(float in_lineWidth = 0.0f);
 
         float lineWidth = 0.0f;
 

@@ -18,7 +18,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 namespace vsg
 {
     /// PhysicalDevice encapsulates VkPhysicalDevice
-    /// Maps to a Vulkan capable physical device, like a dedicated graphics car or integrated GPU.
+    /// Maps to a Vulkan capable physical device, like a dedicated graphics card or integrated GPU.
     class VSG_DECLSPEC PhysicalDevice : public Inherit<Object, PhysicalDevice>
     {
     public:
@@ -31,7 +31,7 @@ namespace vsg
         std::pair<int, int> getQueueFamily(VkQueueFlags queueFlags, Surface* surface) const;
 
         using QueueFamilyProperties = std::vector<VkQueueFamilyProperties>;
-        const QueueFamilyProperties& getQueueFamilyProperties() const { return _queueFamiles; }
+        const QueueFamilyProperties& getQueueFamilyProperties() const { return _queueFamilies; }
 
         const VkPhysicalDeviceFeatures& getFeatures() const { return _features; }
         const VkPhysicalDeviceProperties& getProperties() const { return _properties; }
@@ -73,7 +73,10 @@ namespace vsg
         }
 
         /// Call vkEnumerateDeviceExtensionProperties to enumerate extension properties.
-        std::vector<VkExtensionProperties> enumerateDeviceExtensionProperties(const char* pLayerName = nullptr);
+        ExtensionProperties enumerateDeviceExtensionProperties(const char* pLayerName = nullptr);
+
+        /// return true if the extension is supported by physicalDevice
+        bool supportsDeviceExtension(const char* extensionName);
 
     protected:
         // use Instance::getDevice(..) to create PhysicalDevice
@@ -87,7 +90,7 @@ namespace vsg
 
         VkPhysicalDeviceFeatures _features;
         VkPhysicalDeviceProperties _properties;
-        QueueFamilyProperties _queueFamiles;
+        QueueFamilyProperties _queueFamilies;
 
         PFN_vkGetPhysicalDeviceFeatures2 _vkGetPhysicalDeviceFeatures2 = nullptr;
         PFN_vkGetPhysicalDeviceProperties2 _vkGetPhysicalDeviceProperties2 = nullptr;

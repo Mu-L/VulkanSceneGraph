@@ -11,7 +11,6 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 </editor-fold> */
 
 #include <vsg/commands/SetViewport.h>
-#include <vsg/io/Options.h>
 #include <vsg/vk/CommandBuffer.h>
 
 using namespace vsg;
@@ -21,9 +20,9 @@ SetViewport::SetViewport() :
 {
 }
 
-SetViewport::SetViewport(uint32_t in_firstViewport, const Viewports& in_vieports) :
+SetViewport::SetViewport(uint32_t in_firstViewport, const Viewports& in_viewports) :
     firstViewport(in_firstViewport),
-    viewports(in_vieports)
+    viewports(in_viewports)
 {
 }
 

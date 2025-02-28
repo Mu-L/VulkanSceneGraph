@@ -12,7 +12,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
 </editor-fold> */
 
-// we can't implement the anonymous union/structs combination without causing warnings, so disabled them for just this header
+// we can't implement the anonymous union/structs combination without causing warnings, so disable them for just this header
 
 #include <vsg/maths/mat4.h>
 
@@ -29,7 +29,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 namespace vsg
 {
 
-    /// t_quat template class that a represents quaternion
+    /// t_quat template class that represents a quaternion
     template<typename T>
     struct t_quat
     {
@@ -45,7 +45,7 @@ namespace vsg
         };
 
         constexpr t_quat() :
-            value{} {}
+            value{0.0, 0.0, 0.0, 1.0} {}
         constexpr t_quat(const t_quat& v) :
             value{v.x, v.y, v.z, v.w} {}
         constexpr t_quat(value_type in_x, value_type in_y, value_type in_z, value_type in_w) :
@@ -119,7 +119,7 @@ namespace vsg
             value_type dot_pd = vsg::dot(from, to);
             value_type div = std::sqrt(length2(from) * length2(to));
             vsg::dvec3 axis;
-            if (div - dot_pd < epsilon)
+            if (div - std::abs(dot_pd) < epsilon)
             {
                 axis = orthogonal(from);
             }
@@ -141,18 +141,40 @@ namespace vsg
             z = axis.z * sinhalfangle * inversenorm;
             w = coshalfangle;
         }
+
+        explicit operator bool() const noexcept { return value[0] != 0.0 || value[1] != 0.0 || value[2] != 0.0 || value[3] != 0.0; }
     };
 
-    using quat = t_quat<float>;   /// float quaternion
-    using dquat = t_quat<double>; /// double quaternion
+    using quat = t_quat<float>;         /// float quaternion
+    using dquat = t_quat<double>;       /// double quaternion
+    using ldquat = t_quat<long double>; /// long double quaternion
 
     VSG_type_name(vsg::quat);
     VSG_type_name(vsg::dquat);
+    VSG_type_name(vsg::ldquat);
 
     template<typename T>
     constexpr bool operator==(const t_quat<T>& lhs, const t_quat<T>& rhs)
     {
         return lhs[0] == rhs[0] && lhs[1] == rhs[1] && lhs[2] == rhs[2] && lhs[3] == rhs[3];
+    }
+
+    template<typename T>
+    constexpr bool operator!=(const t_quat<T>& lhs, const t_quat<T>& rhs)
+    {
+        return lhs[0] != rhs[0] || lhs[1] != rhs[1] || lhs[2] != rhs[2] || lhs[3] != rhs[3];
+    }
+
+    template<typename T>
+    constexpr bool operator<(const t_quat<T>& lhs, const t_quat<T>& rhs)
+    {
+        if (lhs[0] < rhs[0]) return true;
+        if (lhs[0] > rhs[0]) return false;
+        if (lhs[1] < rhs[1]) return true;
+        if (lhs[1] > rhs[1]) return false;
+        if (lhs[2] < rhs[2]) return true;
+        if (lhs[2] > rhs[2]) return false;
+        return lhs[3] < rhs[3];
     }
 
     template<typename T>
@@ -164,7 +186,7 @@ namespace vsg
     template<typename T>
     constexpr t_quat<T> conjugate(const t_quat<T>& v)
     {
-        return t_quat<T>(-v[0], -v[1], -v[2], -v[3]);
+        return t_quat<T>(-v[0], -v[1], -v[2], v[3]);
     }
 
     template<typename T>
@@ -241,7 +263,7 @@ namespace vsg
     template<typename T>
     constexpr t_quat<T> inverse(const t_quat<T>& v)
     {
-        t_quat<T> c = conj(v);
+        t_quat<T> c = conjugate(v);
         T inverse_len = static_cast<T>(1.0) / length(v);
         return t_quat<T>(c[0] * inverse_len, c[1] * inverse_len, c[2] * inverse_len, c[3] * inverse_len);
     }
@@ -272,7 +294,7 @@ namespace vsg
         }
         else
         {
-            // quaternion's are very close so just linearly interpolate
+            // quaternions are very close so just linearly interpolate
             return (from * (one - r)) + (to * r);
         }
     }

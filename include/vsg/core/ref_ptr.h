@@ -60,9 +60,19 @@ namespace vsg
             if (_ptr) _ptr->ref();
         }
 
+        // std::nullptr_t requires extra header
+        ref_ptr(decltype(nullptr)) noexcept :
+            ref_ptr() {}
+
         ~ref_ptr()
         {
             if (_ptr) _ptr->unref();
+        }
+
+        void reset()
+        {
+            if (_ptr) _ptr->unref();
+            _ptr = nullptr;
         }
 
         ref_ptr& operator=(T* ptr)
@@ -75,7 +85,7 @@ namespace vsg
 
             if (_ptr) _ptr->ref();
 
-            // unref the original pointer after ref in case the old pointer object a parent of the new pointers object
+            // unref the original pointer after ref in case the old pointer object is a parent of the new pointer's object
             if (temp_ptr) temp_ptr->unref();
 
             return *this;
@@ -91,7 +101,7 @@ namespace vsg
 
             if (_ptr) _ptr->ref();
 
-            // unref the original pointer after ref in case the old pointer object a parent of the new pointers object
+            // unref the original pointer after ref in case the old pointer object is a parent of the new pointer's object
             if (temp_ptr) temp_ptr->unref();
 
             return *this;
@@ -108,7 +118,7 @@ namespace vsg
 
             if (_ptr) _ptr->ref();
 
-            // unref the original pointer after ref in case the old pointer object a parent of the new pointers object
+            // unref the original pointer after ref in case the old pointer object is a parent of the new pointer's object
             if (temp_ptr) temp_ptr->unref();
 
             return *this;
@@ -130,7 +140,7 @@ namespace vsg
         }
 
         template<class R>
-        bool operator<(const ref_ptr<R>& rhs) const { return (rhs._ptr < _ptr); }
+        bool operator<(const ref_ptr<R>& rhs) const { return (_ptr < rhs._ptr); }
 
         template<class R>
         bool operator==(const ref_ptr<R>& rhs) const { return (rhs._ptr == _ptr); }
@@ -139,7 +149,7 @@ namespace vsg
         bool operator!=(const ref_ptr<R>& rhs) const { return (rhs._ptr != _ptr); }
 
         template<class R>
-        bool operator<(const R* rhs) const { return (rhs < _ptr); }
+        bool operator<(const R* rhs) const { return (_ptr < rhs); }
 
         template<class R>
         bool operator==(const R* rhs) const { return (rhs == _ptr); }
@@ -151,7 +161,7 @@ namespace vsg
 
         explicit operator bool() const noexcept { return valid(); }
 
-        // potentially dangerous automatic type conversion, could cause dangling pointer if ref_ptr<> assigned to C pointer, if ref_ptr<> destruction cause an object delete.
+        // potentially dangerous automatic type conversion, could cause dangling pointer if ref_ptr<> assigned to C pointer and ref_ptr<> destruction causes an object delete.
         operator T*() const noexcept { return _ptr; }
 
         void operator[](int) const = delete;

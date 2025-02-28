@@ -106,15 +106,26 @@ namespace vsg
             value[3].set(v12, v13, v14, v15);
         }
 
+        template<typename R>
+        void set(const t_mat4<R>& rhs)
+        {
+            value[0] = rhs[0];
+            value[1] = rhs[1];
+            value[2] = rhs[2];
+            value[3] = rhs[3];
+        }
+
         T* data() { return value[0].data(); }
         const T* data() const { return value[0].data(); }
     };
 
-    using mat4 = t_mat4<float>;   /// float 4x4 matrix
-    using dmat4 = t_mat4<double>; /// double 4x4 matrix
+    using mat4 = t_mat4<float>;         /// float 4x4 matrix
+    using dmat4 = t_mat4<double>;       /// double 4x4 matrix
+    using ldmat4 = t_mat4<long double>; /// long double 4x4 matrix
 
     VSG_type_name(vsg::mat4);
     VSG_type_name(vsg::dmat4);
+    VSG_type_name(vsg::ldmat4);
 
     template<typename T>
     bool operator==(const t_mat4<T>& lhs, const t_mat4<T>& rhs)
@@ -198,8 +209,9 @@ namespace vsg
                          lhs[0] * rhs[3][0] + lhs[1] * rhs[3][1] + lhs[2] * rhs[3][2] + lhs[3] * rhs[3][3]);
     }
 
-    /* Left multiplication of a plane and a matrix. This can be used directly to transform a plane
-       from a coordinate system's local coordinates to world coordinates. */
+    /* Left multiplication of a plane and a matrix. If the matrix is the inverse of the
+       local-to-world transform i.e., the world-to-local transform, then this can be used directly
+       to transform a plane from a coordinate system's local coordinates to world coordinates. */
     template<typename T, typename R>
     t_plane<T> operator*(const t_plane<T>& lhs, const t_mat4<R>& rhs)
     {

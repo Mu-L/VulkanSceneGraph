@@ -21,14 +21,16 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 #    include <cstdlib>
 #    include <direct.h>
 #    include <io.h>
-//	 cctype is needed for tolower()
-#    include <cctype>
 #    include <windows.h>
 
 #    ifdef _MSC_VER
 #        ifndef PATH_MAX
 #            define PATH_MAX MAX_PATH
 #        endif
+#    endif
+
+#    ifdef __MINGW32__
+#        include <sys/stat.h>
 #    endif
 
 #else
@@ -47,7 +49,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
 using namespace vsg;
 
-#if defined(_MSC_VER)
+#if defined(_MSC_VER) || defined(__MINGW32__)
 const char envPathDelimiter = ';';
 #else
 const char envPathDelimiter = ':';
@@ -55,7 +57,7 @@ const char envPathDelimiter = ':';
 
 std::string vsg::getEnv(const char* env_var)
 {
-#if defined(_MSC_VER)
+#if defined(_MSC_VER) || defined(__MINGW32__)
     char env_value[4096];
     std::size_t len;
     if (auto error = getenv_s(&len, env_value, sizeof(env_value) - 1, env_var); error != 0 || len == 0)
@@ -73,7 +75,7 @@ Paths vsg::getEnvPaths(const char* env_var)
 {
     if (!env_var) return {};
 
-#if defined(_MSC_VER)
+#if defined(_MSC_VER) || defined(__MINGW32__)
     char env_value[4096];
     std::size_t len;
     if (auto error = getenv_s(&len, env_value, sizeof(env_value) - 1, env_var); error != 0 || len == 0)
@@ -103,102 +105,41 @@ Paths vsg::getEnvPaths(const char* env_var)
     return filepaths;
 }
 
+#if !defined(S_ISDIR)
+#    if defined(_S_IFDIR) && !defined(__S_IFDIR)
+#        define __S_IFDIR _S_IFDIR
+#    endif
+#    define S_ISDIR(mode) (mode & __S_IFDIR)
+#endif
+
+FileType vsg::fileType(const Path& path)
+{
+#if defined(_MSC_VER) || defined(__MINGW32__)
+    struct __stat64 stbuf;
+    if (_wstat64(path.c_str(), &stbuf) != 0) return FILE_NOT_FOUND;
+#elif defined(__APPLE__)
+    struct stat stbuf;
+    if (stat(path.c_str(), &stbuf) != 0) return FILE_NOT_FOUND;
+#else
+    struct stat64 stbuf;
+    if (stat64(path.c_str(), &stbuf) != 0) return FILE_NOT_FOUND;
+#endif
+
+    if ((stbuf.st_mode & S_IFDIR) != 0)
+        return DIRECTORY;
+    else if ((stbuf.st_mode & S_IFREG) != 0)
+        return REGULAR_FILE;
+    else
+        return FILE_NOT_FOUND;
+}
+
 bool vsg::fileExists(const Path& path)
 {
-#if defined(_MSC_VER)
+#if defined(_MSC_VER) || defined(__MINGW32__)
     return _waccess(path.c_str(), 0) == 0;
 #else
     return access(path.c_str(), F_OK) == 0;
 #endif
-}
-
-Path vsg::filePath(const Path& path)
-{
-    if (trailingRelativePath(path)) return path;
-
-    auto slash = path.find_last_of(Path::separators);
-    if (slash != vsg::Path::npos)
-    {
-        return path.substr(0, slash);
-    }
-    else
-    {
-        return {};
-    }
-}
-
-Path vsg::fileExtension(const Path& path)
-{
-    auto dot = path.find_last_of('.');
-    if (dot == Path::npos || (dot + 1) == path.size()) return {};
-
-    auto slash = path.find_last_of(Path::separators);
-    if (slash != Path::npos && dot < slash) return {};
-
-    return path.substr(dot);
-}
-
-Path vsg::lowerCaseFileExtension(const Path& path)
-{
-    Path ext = fileExtension(path);
-    for (auto& c : ext) c = std::tolower(c);
-    return ext;
-}
-
-Path vsg::simpleFilename(const Path& path)
-{
-    if (trailingRelativePath(path)) return {};
-
-    auto dot = path.find_last_of('.');
-    auto slash = path.find_last_of(Path::separators);
-    if (slash != Path::npos)
-    {
-        if ((dot == Path::npos) || (dot < slash))
-            return path.substr(slash + 1);
-        else
-            return path.substr(slash + 1, dot - slash - 1);
-    }
-    else
-    {
-        if (dot == Path::npos)
-            return path;
-        else
-            return path.substr(0, dot);
-    }
-}
-
-bool vsg::trailingRelativePath(const Path& path)
-{
-    if (path == ".") return true;
-    if (path == "..") return true;
-    if (path.size() >= 2)
-    {
-        if (path.compare(path.size() - 2, 2, "/.") == 0) return true;
-        if (path.compare(path.size() - 2, 2, "\\.") == 0) return true;
-
-        if (path.size() >= 3)
-        {
-            if (path.compare(path.size() - 3, 3, "/..") == 0) return true;
-            if (path.compare(path.size() - 3, 3, "\\..") == 0) return true;
-        }
-    }
-    return false;
-}
-
-Path vsg::removeExtension(const Path& path)
-{
-    if (trailingRelativePath(path)) return path;
-
-    auto dot = path.find_last_of('.');
-    if (dot == Path::npos) return path;
-
-    auto slash = path.find_last_of(Path::separators);
-    if (slash != Path::npos && dot < slash)
-        return path;
-    else if (dot > 1)
-        return path.substr(0, dot);
-    else
-        return {};
 }
 
 Path vsg::findFile(const Path& filename, const Paths& paths)
@@ -226,7 +167,7 @@ Path vsg::findFile(const Path& filename, const Options* options)
             // if appropriate use the filename directly if it exists.
             if (options->checkFilenameHint == Options::CHECK_ORIGINAL_FILENAME_EXISTS_FIRST && fileExists(filename)) return filename;
 
-            // search for the file if the in the specific paths.
+            // search for the file in the options specific paths.
             if (auto path = findFile(filename, options->paths)) return path;
 
             // if appropriate use the filename directly if it exists.
@@ -256,21 +197,19 @@ bool vsg::makeDirectory(const Path& path)
 
         if (directory_to_create.size() == 2 && directory_to_create[1] == ':')
         {
-            // ignore a C: style drive prefixes
+            // ignore C: style drive prefixes
             continue;
         }
 
-#if defined(_MSC_VER)
+#if defined(_MSC_VER) || defined(__MINGW32__)
         if (int status = _wmkdir(directory_to_create.c_str()); status != 0)
-#elif defined(__MINGW32__)
-        if (int status = mkdir(directory_to_create.c_str()); status != 0)
 #else // POSIX
         if (int status = mkdir(directory_to_create.c_str(), 0755); status != 0)
 #endif
         {
             if (errno != EEXIST)
             {
-                // quietly ignore a mkdir on a file that already exists as this can happen safely during a filling in a filecache.
+                // quietly ignore a mkdir on a file that already exists as this can happen safely during filling in a filecache.
                 debug("mkdir(", directory_to_create, ") failed. errno = ", errno);
             }
             return false;
@@ -290,15 +229,19 @@ Path vsg::executableFilePath()
     if (result && result < std::size(buf))
         path = buf;
 #elif defined(__linux__)
-    // TODO need to handle case where executable filename is longer than PATH_MAX
-    // See https://stackoverflow.com/questions/5525668/how-to-implement-readlink-to-find-the-path
-    char buf[PATH_MAX + 1];
-    ssize_t len = ::readlink("/proc/self/exe", buf, sizeof(buf) - 1);
-    if (len != -1)
+
+    std::vector<char> buffer(1024);
+    ssize_t len = 0;
+    while ((len = ::readlink("/proc/self/exe", buffer.data(), buffer.size())) == static_cast<ssize_t>(buffer.size()))
     {
-        buf[len] = '\0';
-        path = buf;
+        buffer.resize(buffer.size() * 2);
     }
+
+    // add terminator to string.
+    buffer[len] = '\0';
+
+    return buffer.data();
+
 #elif defined(__APPLE__)
 #    if TARGET_OS_MAC
     char realPathName[PATH_MAX + 1];
@@ -330,7 +273,7 @@ Path vsg::executableFilePath()
 
 FILE* vsg::fopen(const Path& path, const char* mode)
 {
-#if defined(_MSC_VER)
+#if defined(_MSC_VER) || defined(__MINGW32__)
     std::wstring wMode;
     convert_utf(mode, wMode);
 
@@ -344,3 +287,44 @@ FILE* vsg::fopen(const Path& path, const char* mode)
     return ::fopen(path.c_str(), mode);
 #endif
 }
+
+#if defined(_MSC_VER) || defined(__MINGW32__)
+// Microsoft API for reading directories
+Paths vsg::getDirectoryContents(const Path& directoryName)
+{
+    WIN32_FIND_DATAW ffd;
+
+    auto searchFolder = directoryName / "*";
+    auto handle = FindFirstFileW(searchFolder.c_str(), &ffd);
+    if (handle == INVALID_HANDLE_VALUE) return {};
+
+    Paths paths;
+    do
+    {
+        paths.push_back(ffd.cFileName);
+    } while (FindNextFileW(handle, &ffd) != 0);
+
+    FindClose(handle);
+
+    return paths;
+}
+#else
+// posix API for reading directories
+#    include <dirent.h>
+Paths vsg::getDirectoryContents(const Path& directoryName)
+{
+    auto handle = opendir(directoryName.c_str());
+    if (handle == 0) return {};
+
+    Paths paths;
+    dirent* rc = nullptr;
+    while ((rc = readdir(handle)) != nullptr)
+    {
+        paths.push_back(rc->d_name);
+    }
+
+    closedir(handle);
+
+    return paths;
+}
+#endif

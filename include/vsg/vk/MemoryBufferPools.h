@@ -23,11 +23,11 @@ namespace vsg
 {
 
     /// MemoryBufferPools manages a pool of vsg::DeviceMemory and vsg::Buffer that use them.
-    /// Methods are providing for getting Buffer from the pool, sharing memory to make better use of device memory.
+    /// Methods are provided for getting Buffer from the pool, sharing memory to make better use of device memory.
     class VSG_DECLSPEC MemoryBufferPools : public Inherit<Object, MemoryBufferPools>
     {
     public:
-        MemoryBufferPools(const std::string& name, ref_ptr<Device> in_device, const ResourceRequirements& in_resouceRequirements = {});
+        MemoryBufferPools(const std::string& name, ref_ptr<Device> in_device, const ResourceRequirements& in_resourceRequirements = {});
 
         std::string name;
         ref_ptr<Device> device;
@@ -54,5 +54,6 @@ namespace vsg
         using BufferPools = std::vector<ref_ptr<Buffer>>;
         BufferPools bufferPools;
     };
+    VSG_type_name(vsg::MemoryBufferPools);
 
 } // namespace vsg

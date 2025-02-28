@@ -11,13 +11,18 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 </editor-fold> */
 
 #include <vsg/core/compare.h>
-#include <vsg/io/Options.h>
 #include <vsg/io/stream.h>
 #include <vsg/nodes/MatrixTransform.h>
 
 using namespace vsg;
 
 MatrixTransform::MatrixTransform()
+{
+}
+
+MatrixTransform::MatrixTransform(const MatrixTransform& rhs, const CopyOp& copyop) :
+    Inherit(rhs, copyop),
+    matrix(rhs.matrix)
 {
 }
 
@@ -31,22 +36,40 @@ int MatrixTransform::compare(const Object& rhs_object) const
     int result = Transform::compare(rhs_object);
     if (result != 0) return result;
 
-    auto& rhs = static_cast<decltype(*this)>(rhs_object);
+    const auto& rhs = static_cast<decltype(*this)>(rhs_object);
     return compare_value(matrix, rhs.matrix);
 }
 
 void MatrixTransform::read(Input& input)
 {
-    Transform::read(input);
-
-    input.read("matrix", matrix);
-    input.read("subgraphRequiresLocalFrustum", subgraphRequiresLocalFrustum);
+    if (input.version_greater_equal(1, 1, 2))
+    {
+        Node::read(input);
+        input.read("matrix", matrix);
+        input.read("subgraphRequiresLocalFrustum", subgraphRequiresLocalFrustum);
+        input.readObjects("children", children);
+    }
+    else
+    {
+        Transform::read(input);
+        input.read("matrix", matrix);
+        input.read("subgraphRequiresLocalFrustum", subgraphRequiresLocalFrustum);
+    }
 }
 
 void MatrixTransform::write(Output& output) const
 {
-    Transform::write(output);
-
-    output.write("matrix", matrix);
-    output.write("subgraphRequiresLocalFrustum", subgraphRequiresLocalFrustum);
+    if (output.version_greater_equal(1, 1, 2))
+    {
+        Node::write(output);
+        output.write("matrix", matrix);
+        output.write("subgraphRequiresLocalFrustum", subgraphRequiresLocalFrustum);
+        output.writeObjects("children", children);
+    }
+    else
+    {
+        Transform::write(output);
+        output.write("matrix", matrix);
+        output.write("subgraphRequiresLocalFrustum", subgraphRequiresLocalFrustum);
+    }
 }

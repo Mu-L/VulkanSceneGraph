@@ -11,7 +11,6 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 </editor-fold> */
 
 #include <vsg/io/Logger.h>
-#include <vsg/io/Options.h>
 #include <vsg/nodes/Bin.h>
 #include <vsg/vk/State.h>
 
@@ -23,6 +22,13 @@ Bin::Bin()
 {
 }
 
+Bin::Bin(const Bin& rhs, const CopyOp& copyop) :
+    Inherit(rhs, copyop),
+    binNumber(rhs.binNumber),
+    sortOrder(rhs.sortOrder)
+{
+}
+
 Bin::Bin(int32_t in_binNumber, SortOrder in_sortOrder) :
     binNumber(in_binNumber),
     sortOrder(in_sortOrder)
@@ -31,6 +37,16 @@ Bin::Bin(int32_t in_binNumber, SortOrder in_sortOrder) :
 
 Bin::~Bin()
 {
+}
+
+int Bin::compare(const Object& rhs_object) const
+{
+    int result = Object::compare(rhs_object);
+    if (result != 0) return result;
+
+    const auto& rhs = static_cast<decltype(*this)>(rhs_object);
+    if ((result = compare_value(binNumber, rhs.binNumber)) != 0) return result;
+    return compare_value(sortOrder, rhs.sortOrder);
 }
 
 void Bin::clear()
@@ -74,7 +90,7 @@ void Bin::add(State* state, double value, const Node* node)
 #endif
 
     element.stateCommandIndex = static_cast<uint32_t>(_stateCommands.size());
-    for (auto& stateStack : state->stateStacks)
+    for (const auto& stateStack : state->stateStacks)
     {
         if (stateStack.size() > 0)
         {
@@ -114,9 +130,9 @@ void Bin::traverse(RecordTraversal& rt) const
     state->pushFrustum();
     state->dirty = true;
 
-    for (auto& keyElement : _binElements)
+    for (const auto& keyElement : _binElements)
     {
-        auto& element = _elements[keyElement.second];
+        const auto& element = _elements[keyElement.second];
 
         if (element.matrixIndex != previousMatrixIndex)
         {
@@ -133,20 +149,13 @@ void Bin::traverse(RecordTraversal& rt) const
 
         if (element.stateCommandCount > 0)
         {
-            uint32_t endIndex = element.stateCommandIndex + element.stateCommandCount;
-            for (uint32_t i = element.stateCommandIndex; i < endIndex; ++i)
-            {
-                auto command = _stateCommands[i];
-                state->stateStacks[command->slot].push(command);
-            }
+            auto begin = _stateCommands.begin() + element.stateCommandIndex;
+            auto end = begin + element.stateCommandCount;
+            state->push(begin, end);
 
             element.child->accept(rt);
 
-            for (uint32_t i = element.stateCommandIndex; i < endIndex; ++i)
-            {
-                auto command = _stateCommands[i];
-                state->stateStacks[command->slot].pop();
-            }
+            state->pop(begin, end);
         }
         else
         {
@@ -170,6 +179,6 @@ void Bin::write(Output& output) const
 {
     Node::write(output);
 
-    output.write("binNimber", binNumber);
+    output.write("binNumber", binNumber);
     output.write("sortOrder", sortOrder);
 }

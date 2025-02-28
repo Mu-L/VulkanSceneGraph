@@ -11,7 +11,6 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 </editor-fold> */
 
 #include <vsg/core/compare.h>
-#include <vsg/io/Options.h>
 #include <vsg/state/ColorBlendState.h>
 #include <vsg/vk/Context.h>
 
@@ -50,12 +49,39 @@ ColorBlendState::~ColorBlendState()
 {
 }
 
+void ColorBlendState::configureAttachments(bool blendEnable)
+{
+    for (auto& attachment : attachments)
+    {
+        if (blendEnable)
+        {
+            attachment.blendEnable = VK_TRUE;
+            attachment.srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA;
+            attachment.dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
+            attachment.colorBlendOp = VK_BLEND_OP_ADD;
+            attachment.srcAlphaBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA;
+            attachment.dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO;
+            attachment.alphaBlendOp = VK_BLEND_OP_ADD;
+        }
+        else
+        {
+            attachment.blendEnable = VK_FALSE;
+            attachment.srcColorBlendFactor = VK_BLEND_FACTOR_ZERO;
+            attachment.dstColorBlendFactor = VK_BLEND_FACTOR_ZERO;
+            attachment.colorBlendOp = VK_BLEND_OP_ADD;
+            attachment.srcAlphaBlendFactor = VK_BLEND_FACTOR_ZERO;
+            attachment.dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO;
+            attachment.alphaBlendOp = VK_BLEND_OP_ADD;
+        }
+    }
+}
+
 int ColorBlendState::compare(const Object& rhs_object) const
 {
-    int result = Object::compare(rhs_object);
+    int result = GraphicsPipelineState::compare(rhs_object);
     if (result != 0) return result;
 
-    auto& rhs = static_cast<decltype(*this)>(rhs_object);
+    const auto& rhs = static_cast<decltype(*this)>(rhs_object);
     if ((result = compare_value(logicOpEnable, rhs.logicOpEnable))) return result;
     if ((result = compare_value(logicOp, rhs.logicOp))) return result;
     if ((result = compare_value_container(attachments, rhs.attachments))) return result;
@@ -64,12 +90,16 @@ int ColorBlendState::compare(const Object& rhs_object) const
 
 void ColorBlendState::read(Input& input)
 {
-    Object::read(input);
+    GraphicsPipelineState::read(input);
 
     input.readValue<uint32_t>("logicOp", logicOp);
     input.readValue<uint32_t>("logicOpEnable", logicOpEnable);
 
-    attachments.resize(input.readValue<uint32_t>("NumColorBlendAttachments")); // TODO review capitalization
+    if (input.version_greater_equal(0, 7, 3))
+        attachments.resize(input.readValue<uint32_t>("attachments"));
+    else
+        attachments.resize(input.readValue<uint32_t>("NumColorBlendAttachments"));
+
     for (auto& colorBlendAttachment : attachments)
     {
         input.readValue<uint32_t>("blendEnable", colorBlendAttachment.blendEnable);
@@ -87,12 +117,16 @@ void ColorBlendState::read(Input& input)
 
 void ColorBlendState::write(Output& output) const
 {
-    Object::write(output);
+    GraphicsPipelineState::write(output);
 
     output.writeValue<uint32_t>("logicOp", logicOp);
     output.writeValue<uint32_t>("logicOpEnable", logicOpEnable);
 
-    output.writeValue<uint32_t>("NumColorBlendAttachments", attachments.size()); // TODO review capitalization
+    if (output.version_greater_equal(0, 7, 3))
+        output.writeValue<uint32_t>("attachments", attachments.size());
+    else
+        output.writeValue<uint32_t>("NumColorBlendAttachments", attachments.size());
+
     for (auto& colorBlendAttachment : attachments)
     {
         output.writeValue<uint32_t>("blendEnable", colorBlendAttachment.blendEnable);

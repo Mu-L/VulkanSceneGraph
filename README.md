@@ -1,89 +1,51 @@
 ![VulkanSceneGraph](https://raw.githubusercontent.com/vsg-dev/VulkanSceneGraph/master/docs/images/VSGlogo.png)
 
-VulkanSceneGraph (VSG), is a modern, cross platform, high performance scene graph library built upon [Vulkan](https://www.khronos.org/vulkan/) graphics/compute API. The software is written in [C++17](https://en.wikipedia.org/wiki/C%2B%2B17), and follows the [CppCoreGuidelines](https://isocpp.github.io/CppCoreGuidelines/CppCoreGuidelines) and [FOSS Best Practices](https://github.com/coreinfrastructure/best-practices-badge/blob/master/doc/criteria.md).  The source code is published under the [MIT License](LICENSE.md).
+VulkanSceneGraph (VSG), is a modern, cross platform, high performance scene graph library built upon [Vulkan](https://www.khronos.org/vulkan/) graphics/compute API. The software is written in [C++17](https://en.wikipedia.org/wiki/C%2B%2B17), and follows the [CppCoreGuidelines](https://isocpp.github.io/CppCoreGuidelines/CppCoreGuidelines) and [FOSS Best Practices](https://github.com/coreinfrastructure/best-practices-badge/blob/master/doc/criteria.md).  The source code is published under the [MIT License](LICENSE.md), with the exception of [vulkan.h](include/vsg/vk/vulkan.h), used for Vulkan extensions, which is under [Apache License 2.0](LICENSE.Vulkan-Headers.md).
 
-The project aims to bring the performance of Vulkan to the wider developer community by providing a modern, high quality software library that is easy to use and focused on making the development of high performance graphics and compute applications a productive and fun experience.  Sharing the same lead author as the OpenSceneGraph, all the lessons about software quality, performance and the needs of application developers are applied to VulkanSceneGraph to provide a distillation of what a next gen scene graph needs to be.
+This repository contains C++ headers and source and CMake build scripts to build the libvsg library.  Additional support libraries and examples are provided in separate repositories, links to these are provided below.  The software currently builds under Linux (desktops variants through to Jetson & Raspberry Pi), Windows (VisualStudio, MinGW & Cygwin), Android, and macOS & iOS (using [MoltenVk](https://github.com/KhronosGroup/MoltenVK)).
 
-This repository contains basic documentation, C++ headers and source and CMake build scripts to build the libvsg library.  Additional support libraries and examples are provided in separate repositories, links to these are provided below.  The software currently builds under Linux (desktops variants through to Jetson & Raspberry Pi), Windows (VisualStudio, MinGW & Cygwin), Android, and macOS & iOS (using [MoltenVk](https://github.com/KhronosGroup/MoltenVK)).
+## Links to further information
 
-## Features
-The VulkanSceneGraph project is comprised of the main VulkanSceneGraph library (provided by this repo) and a collection of optional libraries, each in their own dedicated repositories hosted alongside each other on [https://github.com/vsg-dev](https://github.com/vsg-dev), that provide additional features and example programs and templates for your own VulkanSceneGraph projects.
+The [vulkanscenegraph.org website](https://www.vulkanscenegraph.org) provides a detailed list of features, tutorials and reference documentation, while this repository provides the source code and build support for creating the VulkanSceneGraph library. Quick links to resources hosted on the website:
+* [Features](https://vsg-dev.github.io/vsg-dev.io/features) - tour of features you'll find in the VulkanSceneGraph and companion projects.
+* [Screenshots](https://vsg-dev.github.io/vsg-dev.io/screenshots) - screenshots from VulkanSceneGraph examples and 3rd party libraries and applications
+* [Tutorials](https://vsg-dev.github.io/vsg-dev.io/tutorials) - mulit-part tutorial that takes you from introduction to scene graphs to multi-threading and optimization.
+* [Documentation](https://vsg-dev.github.io/vsg-dev.io/documentation) - doxygen generated reference documentation and links to 3rd party learning materials
+* [Discussion](https://github.com/vsg-dev/VulkanSceneGraph/discussions) - Discussion forum hosted on github.
+* [Services](https://vsg-dev.github.io/vsg-dev.io/services) - List of companies connected to the VulkanSceneGraph project that can provide professional services
 
-### Features provided by the core VulkanSceneGraph library are:
 
-* Robust, thread safe memory management with custom block memory allocator and high performance smart pointers that are smaller and faster than std equivalents.
-* GLSL style maths class - no need for 3rd party libs like GLM.
-* Coherent Object model with easy to use and extend serialization, including native binary and ascii file support for all scene graph objects.
-* C++ classes that encapsulate Vulkan Graphics and Compute C API in robust and convenient form, with robust resource management, including serialization support. Complexities and verbose setup usually associated with Vulkan are all dealt with for you so you can concentrate on your compute and graphics tasks.
-* Vulkan extensions for ray tracing and mesh shading.
-* Built in GLSL and SPIR-V shaders for Physics Based Rendering. phong and flat shading and text rendering with #pragma(tic) shader composition support.
-* Class design focused on performance of scene graph operations by minimizing CPU bottlenecks: optimizing data density, layout, cache coherency and minimizing branching leading to better utilization of modern CPU and memory architectures. Traversals through to IO operations can be up to 10 times faster than the OpenSceneGraph.
-* Optimized scene graph performance has been essential for making the most of the performance that Vulkan itself provides over OpenGL/DirectX, benchmarks on large databases show 3 to 20 X performance improvements over OpenSceneGraph/OpenGL.
-* Multi-threading support at the viewer level, file loading and database paging.
-* Flexible Viewer architecture built around Vulkan command recording and queue submission.
-* Native windowing and event support under Windows, Linux, Android, macOS and iOS.
-* Support for double matrices in Camera and Transform class providing support for large database coordinates system such as whole earth/GIS rendering whilst minimizing precision issues.
-* Modern CMake build system that provides config installation alongside binaries making it easier to find and use all the appropriate build options for using the VulkanSceneGraph in your own projects.
-* Minimal and complete approach to design - the whole VulkanSceneGraph interface and implementation, providing all the above functionality, takes 60 thousand lines of C++ code, compared to over 58 thousand for GLM headers, or vulkan.hpp (C++ wrapper for Vulkan) at over 94 thousand lines of code.  The VulkanSceneGraph replaces both and provides much more functionality besides.
+## Links to companion projects that offer additional features
 
-### Features provided by companion projects:
-* [vsgXchange](https://github.com/vsg-dev/vsgXchange) reading and writing of 3rd party image and 3d models and HTTP support.
+Hosted as part of the [vsg-dev](https://github.com/vsg-dev):
+* [vsgXchange](https://github.com/vsg-dev/vsgXchange) reading and writing of 3rd party images and 3d models and HTTP support.
+* [vsgExamples](https://github.com/vsg-dev/vsgExamples) tests & examples.
 * [osg2vsg](https://github.com/vsg-dev/osg2vsg) OpenSceneGraph integration library that enables converting of OSG to VSG scene graph and use of OpenSceneGraph loaders.
 * [vsgImGui](https://github.com/vsg-dev/vsgImGui) ImGui integration enabling UI in graphics window.
 * [vsgQt](https://github.com/vsg-dev/vsgQt) Qt integration with VulkanSceneGraph.
+* [vsgPoints](https://github.com/vsg-dev/vsgPoints) 3d point cloud loading and rendering for VulkanSceneGraph with database paging support and scalability up to billions of points.
 * [vsgUnity](https://github.com/vsg-dev/vsgUnity) plugin for Unity that provides export to native VulkanSceneGraph binary/ascii format.
-* [vsgExamples](https://github.com/vsg-dev/vsgExamples) tests & examples.
 * [MyFirstVsgApplication](https://github.com/vsg-dev/MyFirstVsgApplication) simple standalone VSG application that can be used as a template for your own applications.
 * [vsgFramework](https://github.com/vsg-dev/vsgFramework) template project that uses CMake FetchContent to pull in all the main libraries associated with VulkanSceneGraph and dependencies and builds them together.
+
+Community projects:
 * [vsgSDL](https://github.com/ptrfun/vsgSDL) SDL integration with VulkanSceneGraph.
 * [vsgvr](https://github.com/geefr/vsgvr) OpenVR integration with VulkanSceneGraph.
-
-## Useful links in codebase
-* Detailed build and install [instructions](INSTALL.md)
-* Headers - the public interface : [include/vsg/](include/vsg)
-* Source - the implementation : [src/vsg/](src/vsg)
-* Software development [Road Map](ROADMAP.md)
-* Design : [Principles and Philosophy](docs/Design/DesignPrinciplesAndPhilosophy.md),  [High Level Decisions](docs/Design/HighLevelDesignDecisions.md)
-* Community resources :  [Code of Conduct](docs/CODE_OF_CONDUCT.md), [Contributing guide](docs/CONTRIBUTING.md)
-* Exploration Phase Materials (*completed*): [Areas of Interest](docs/ExplorationPhase/AreasOfInterest.md), [3rd Party Resources](docs/ExplorationPhase/3rdPartyResources.md) and [Exploration Phase Report](docs/ExplorationPhase/VulkanSceneGraphExplorationPhaseReport.md)
-* Prototype Phase Materials (*completed*): [Workplan](docs/PrototypePhase/Workplan.md) and [Prototype Phase Report](docs/PrototypePhase/PrototypePhaseReport.md)
-
-
-## Public discussion list/forum
-The [VulkanSceneGraph Discussion Group](https://github.com/vsg-dev/VulkanSceneGraph/discussions) is the place for project news, discussions of latest developments and any questions you have on how to use the VulkanSceneGraph, and associated projects, in your applications.
-
-For the first part of this projects life we used [vsg-users](https://groups.google.com/forum/#!forum/vsg-users) google group, this will be kept available as an archive of old disucssions.
-
-## Professional Support
-Project lead, [Robert Osfield](mailto:robert.osfield@gmail.com), provides OpenSceneGraph and VulkanSceneGraph related services, the associated income supports open source development work and public support on both projects.  Services provided:
-
-* Open source development - funding of development of new features specific to your project needs.
-* Closed source bespoke development - development of proprietary libraries through to directly working on your applications.
-* Confidential support via dedicated email discussion lists/IM/video conferencing for your team.
-* Consulting.
-* Training.
-
----
+* [vsgCs](https://github.com/timoore/vsgCs) 3D Tiles and Cesium ion integration
+* [vsgEarth](https://github.com/timoore/vsgEarth) osgEarth integration
+* [rocky](https://github.com/pelicanmapping/rocky) 3D Geospatial Application Engine (Vulkan / C++17 / VSG). Pelican Mapping's successor to osgEerth.
 
 ## Quick Guide to building the VSG
 
 ### Prerequisites:
-* C++17 compliant compiler i.e.. g++ 7.3 or later, Clang 6.0 or later, Visual Studio S2017 or later.
-* [Vulkan](https://vulkan.lunarg.com/) 1.1 or later.
-* [CMake](https://www.cmake.org) 3.7 or later.
+* Required: C++17 compliant compiler i.e. g++ 7.3 or later, Clang 6.0 or later, Visual Studio S2017 or later.
+* Required: [CMake](https://www.cmake.org) 3.7 or later.
+* Required: [Vulkan](https://vulkan.lunarg.com/) 1.1 or later.
+* Optional : [glslang](https://github.com/KhronosGroup/glslang) 14.0 or later. Only required if shader compilation at runtime is needed.
 
 The above dependency versions are known to work so they've been set as the current minimum, it may be possible to build against older versions.  If you find success with older versions let us know and we can update the version info.
 
-Download VulkanSDK from [LunarG](https://vulkan.lunarg.com/sdk/home), unpack into local directory and set VUKAN_SDK environment variable to the include/lib directory within it. For Linux it would typically be along the lines of:
-
-    export VULKAN_SDK_VERSION=1.2.162.1
-    export VULKAN_SDK=${PWD}/VulkanSDK/${VULKAN_SDK_VERSION}/x86_64
-
-    mkdir VulkanSDK
-    wget https://sdk.lunarg.com/sdk/download/${VULKAN_SDK_VERSION}/linux/vulkansdk-linux-x86_64-${VULKAN_SDK_VERSION}.tar.gz -O VulkanSDK/vulkansdk-linux-x86_64-${VULKAN_SDK_VERSION}.tar.gz
-    tar zxf VulkanSDK/vulkansdk-linux-x86_64-${VULKAN_SDK_VERSION}.tar.gz -C VulkanSDK/
-
-Once you've downloaded and unpacked the VulkanSDK you'll want to put VULKAN_SDK into your user environment variable setup so that CMake's find_package(Vulkan) can find the VulkanSDK's location.
+While you can install Vulkan and glslang development libraries and headers from 3rd party repositoriesm these may be older, so for the latest versions you can also use the VulkanSDK provided by LunarG.  Your can download VulkanSDK from [LunarG](https://vulkan.lunarg.com/sdk/home), unpack into a local directory and set VULKAN_SDK environment variable to the include/lib directory within it.
 
 ### Command line build instructions:
 
@@ -92,7 +54,6 @@ To build and install the static libvsg library (.a/.lib) in source:
     git clone https://github.com/vsg-dev/VulkanSceneGraph.git
     cd VulkanSceneGraph
     cmake .
-    make -j 8
-    sudo make install
+    cmake --build . -j 16 -t install
 
-Full details on how to build of the VSG (Unix/Windows/Android/macOS) can be found in the [INSTALL.md](INSTALL.md) file.
+Full details on how to build the VSG (Unix/Windows/Android/macOS) can be found in the [INSTALL.md](INSTALL.md) file.

@@ -18,7 +18,6 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
 #include <vsg/io/Input.h>
 #include <vsg/io/Logger.h>
-#include <vsg/io/Options.h>
 #include <vsg/io/Output.h>
 
 using namespace vsg;
@@ -29,14 +28,30 @@ Object::Object() :
 {
 }
 
-Object::Object(const Object& rhs) :
+Object::Object(const Object& rhs, const CopyOp& copyop) :
     Object()
 {
+    // assign this copy constructed object to copyop.duplicate so that it can be lated referenced.
+    if (copyop.duplicate)
+    {
+        if (auto itr = copyop.duplicate->find(&rhs); itr != copyop.duplicate->end())
+        {
+            itr->second = this;
+        }
+    }
+
     if (rhs._auxiliary && rhs._auxiliary->getConnectedObject() == &rhs)
     {
-        // the rhs's rhs._auxiliary is uniquely attached to it, so we need to create our own and copy it's ObjectMap across
+        // the rhs's auxiliary is uniquely attached to it, so we need to create our own and copy its ObjectMap across
         auto& userObjects = getOrCreateAuxiliary()->userObjects;
         userObjects = rhs._auxiliary->userObjects;
+        if (copyop.duplicate)
+        {
+            for (auto itr = userObjects.begin(); itr != userObjects.end(); ++itr)
+            {
+                itr->second = copyop(itr->second);
+            }
+        }
     }
 }
 
@@ -48,7 +63,7 @@ Object& Object::operator=(const Object& rhs)
 
     if (rhs._auxiliary)
     {
-        // the rhs's rhs._auxiliary is uniquely attached to it, so we need to create our own and copy it's ObjectMap across
+        // the rhs's auxiliary is uniquely attached to it, so we need to create our own and copy its ObjectMap across
         auto& userObjects = getOrCreateAuxiliary()->userObjects;
         userObjects = rhs._auxiliary->userObjects;
     }
@@ -84,6 +99,28 @@ void Object::_attemptDelete() const
     }
 }
 
+ref_ptr<Object> Object::clone(const CopyOp& copyop) const
+{
+    if (copyop.duplicate)
+    {
+        auto itr = copyop.duplicate->duplicates.find(this);
+        if (itr != copyop.duplicate->duplicates.end()) return itr->second;
+    }
+    return ref_ptr<Object>(const_cast<Object*>(this));
+}
+
+int Object::compare(const Object& rhs) const
+{
+    if (this == &rhs) return 0;
+    auto this_id = std::type_index(typeid(*this));
+    auto rhs_id = std::type_index(typeid(rhs));
+    if (this_id < rhs_id) return -1;
+    if (this_id > rhs_id) return 1;
+
+    if (_auxiliary == rhs._auxiliary) return 0;
+    return _auxiliary ? (rhs._auxiliary ? _auxiliary->compare(*rhs._auxiliary) : 1) : (rhs._auxiliary ? -1 : 0);
+}
+
 void Object::accept(Visitor& visitor)
 {
     visitor.apply(*this);
@@ -117,7 +154,7 @@ void Object::write(Output& output) const
 {
     if (_auxiliary)
     {
-        // we have a unique auxiliary, need to write out it's ObjectMap entries
+        // we have a unique auxiliary, need to write out its ObjectMap entries
         auto& userObjects = _auxiliary->userObjects;
         output.writeValue<uint32_t>("userObjects", userObjects.size());
         for (auto& entry : userObjects)
@@ -132,7 +169,7 @@ void Object::write(Output& output) const
     }
 }
 
-void Object::setObject(const std::string& key, Object* object)
+void Object::setObject(const std::string& key, ref_ptr<Object> object)
 {
     getOrCreateAuxiliary()->setObject(key, object);
 }
@@ -147,6 +184,18 @@ const Object* Object::getObject(const std::string& key) const
 {
     if (!_auxiliary) return nullptr;
     return _auxiliary->getObject(key);
+}
+
+ref_ptr<Object> Object::getRefObject(const std::string& key)
+{
+    if (!_auxiliary) return {};
+    return _auxiliary->getRefObject(key);
+}
+
+ref_ptr<const Object> Object::getRefObject(const std::string& key) const
+{
+    if (!_auxiliary) return {};
+    return _auxiliary->getRefObject(key);
 }
 
 void Object::removeObject(const std::string& key)

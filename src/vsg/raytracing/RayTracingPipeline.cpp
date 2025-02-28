@@ -13,11 +13,9 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 #include <vsg/core/Exception.h>
 #include <vsg/core/compare.h>
 #include <vsg/io/Logger.h>
-#include <vsg/io/Options.h>
 #include <vsg/raytracing/RayTracingPipeline.h>
 #include <vsg/vk/CommandBuffer.h>
 #include <vsg/vk/Context.h>
-#include <vsg/vk/Extensions.h>
 
 using namespace vsg;
 
@@ -45,7 +43,7 @@ int RayTracingPipeline::compare(const Object& rhs_object) const
     int result = Object::compare(rhs_object);
     if (result != 0) return result;
 
-    auto& rhs = static_cast<decltype(*this)>(rhs_object);
+    const auto& rhs = static_cast<decltype(*this)>(rhs_object);
 
     if ((result = compare_pointer_container(_shaderStages, rhs._shaderStages))) return result;
     if ((result = compare_pointer_container(_rayTracingShaderGroups, rhs._rayTracingShaderGroups))) return result;
@@ -73,7 +71,7 @@ void RayTracingPipeline::write(Output& output) const
     output.writeObject("PipelineLayout", _pipelineLayout.get());
 
     output.writeValue<uint32_t>("NumShaderStages", _shaderStages.size());
-    for (auto& shaderStage : _shaderStages)
+    for (const auto& shaderStage : _shaderStages)
     {
         output.writeObject("ShaderStage", shaderStage.get());
     }
@@ -85,7 +83,7 @@ void RayTracingPipeline::compile(Context& context)
     {
         // compile shaders if required
         bool requiresShaderCompiler = false;
-        for (auto& shaderStage : _shaderStages)
+        for (const auto& shaderStage : _shaderStages)
         {
             if (shaderStage->module)
             {
@@ -204,7 +202,7 @@ RayTracingPipeline::Implementation::Implementation(Context& context, RayTracingP
     }
     else
     {
-        throw Exception{"Error: vsg::Pipeline::createGraphics(...) failed to create VkPipeline.", result};
+        throw Exception{"Error: vsg::RayTracingPipeline failed to create VkPipeline.", result};
     }
 }
 
@@ -232,7 +230,7 @@ int BindRayTracingPipeline::compare(const Object& rhs_object) const
     int result = StateCommand::compare(rhs_object);
     if (result != 0) return result;
 
-    auto& rhs = static_cast<decltype(*this)>(rhs_object);
+    const auto& rhs = static_cast<decltype(*this)>(rhs_object);
     return compare_pointer(_pipeline, rhs._pipeline);
 }
 

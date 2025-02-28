@@ -10,10 +10,10 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
 </editor-fold> */
 
-#include <vsg/io/Options.h>
+#include <vsg/app/Camera.h>
 #include <vsg/maths/transform.h>
+#include <vsg/nodes/CoordinateFrame.h>
 #include <vsg/nodes/MatrixTransform.h>
-#include <vsg/viewer/Camera.h>
 
 using namespace vsg;
 
@@ -203,7 +203,7 @@ dmat4 vsg::inverse(const dmat4& m)
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 //
-// compute determinate of a matrix
+// compute determinant of a matrix
 //
 template<class T>
 T t_determinant(const t_mat4<T>& m)
@@ -221,12 +221,12 @@ T t_determinant(const t_mat4<T>& m)
     return det;
 }
 
-float determinant(const mat4& m)
+float vsg::determinant(const mat4& m)
 {
     return t_determinant<float>(m);
 }
 
-double determinant(const dmat4& m)
+double vsg::determinant(const dmat4& m)
 {
     return t_determinant<double>(m);
 }
@@ -278,7 +278,7 @@ bool t_decompose(const t_mat4<T>& m, t_vec3<T>& translation, t_quat<T>& rotation
 
         auto root = sqrt(rm[i][i] - rm[j][j] - rm[k][k] + static_cast<T>(1.0));
         auto half_inv_root = static_cast<T>(0.5) / root;
-        rotation[i] = static_cast<T>(0.5) / root;
+        rotation[i] = static_cast<T>(0.5) * root;
         rotation[j] = half_inv_root * (rm[i][j] + rm[j][i]);
         rotation[k] = half_inv_root * (rm[i][k] + rm[k][i]);
         rotation[3] = half_inv_root * (rm[j][k] - rm[k][j]);
@@ -295,6 +295,11 @@ bool vsg::decompose(const mat4& m, vec3& translation, quat& rotation, vec3& scal
 bool vsg::decompose(const dmat4& m, dvec3& translation, dquat& rotation, dvec3& scale)
 {
     return t_decompose<double>(m, translation, rotation, scale);
+}
+
+bool vsg::decompose(const ldmat4& m, ldvec3& translation, ldquat& rotation, ldvec3& scale)
+{
+    return t_decompose<long double>(m, translation, rotation, scale);
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
@@ -317,14 +322,14 @@ t_sphere<T> t_computeFrustumBound(const t_mat4<T>& m)
     // TODO : depth range should probably be 0 to 1 for Vulkan, rather than -1 to 1 for OpenGL.
     //
 
-    // compute the a2 the radius squared of the near plane relative to the near planes mid point
+    // compute a2, the radius squared of the near plane relative to the near planes mid point
     vec_type near_center = inv_m * vec_type(0.0, 0.0, -1.0);
     value_type a2 = length2(inv_m * vec_type(-1.0, -1.0, -1.0) - near_center);
     update_radius2(a2, near_center, inv_m * vec_type(1.0, -1.0, -1.0));
     update_radius2(a2, near_center, inv_m * vec_type(1.0, 1.0, -1.0));
     update_radius2(a2, near_center, inv_m * vec_type(-1.0, 1.0, -1.0));
 
-    // compute the b2 the radius squared of the far plane relative to the far planes mid point
+    // compute b2, the radius squared of the far plane relative to the far planes mid point
     vec_type far_center = inv_m * vec_type(0.0, 0.0, 1.0);
     value_type b2 = length2(inv_m * vec_type(-1.0, -1.0, 1.0) - far_center);
     update_radius2(b2, far_center, inv_m * vec_type(1.0, -1.0, 1.0));
@@ -376,16 +381,16 @@ bool vsg::transform(CoordinateConvention source, CoordinateConvention destinatio
     {
         if (destination == CoordinateConvention::Y_UP)
         {
-            matrix.set(0.0, 1.0, 0.0, 0.0,
-                       -1.0, 0.0, 0.0, 0.0,
+            matrix.set(0.0, -1.0, 0.0, 0.0,
+                       1.0, 0.0, 0.0, 0.0,
                        0.0, 0.0, 1.0, 0.0,
                        0.0, 0.0, 0.0, 1.0);
         }
-        else // destination most be Z_UP
+        else // destination must be Z_UP
         {
             matrix.set(0.0, 0.0, 1.0, 0.0,
+                       0.0, 1.0, 0.0, 0.0,
                        -1.0, 0.0, 0.0, 0.0,
-                       0.0, -1.0, 0.0, 0.0,
                        0.0, 0.0, 0.0, 1.0);
         }
     }
@@ -393,12 +398,12 @@ bool vsg::transform(CoordinateConvention source, CoordinateConvention destinatio
     {
         if (destination == CoordinateConvention::X_UP)
         {
-            matrix.set(0.0, -1.0, 0.0, 0.0,
-                       1.0, 0.0, 0.0, 0.0,
+            matrix.set(0.0, 1.0, 0.0, 0.0,
+                       -1.0, 0.0, 0.0, 0.0,
                        0.0, 0.0, 1.0, 0.0,
                        0.0, 0.0, 0.0, 1.0);
         }
-        else // destination most be Z_UP
+        else // destination must be Z_UP
         {
             matrix.set(1.0, 0.0, 0.0, 0.0,
                        0.0, 0.0, 1.0, 0.0,
@@ -410,16 +415,16 @@ bool vsg::transform(CoordinateConvention source, CoordinateConvention destinatio
     {
         if (destination == CoordinateConvention::X_UP)
         {
-            matrix.set(0.0, -1.0, 0.0, 0.0,
-                       1.0, 0.0, -1.0, 0.0,
-                       0.0, 0.0, -0.0, 0.0,
+            matrix.set(0.0, 0.0, -1.0, 0.0,
+                       0.0, 1.0, 0.0, 0.0,
+                       1.0, 0.0, 0.0, 0.0,
                        0.0, 0.0, 0.0, 1.0);
         }
-        else // destination most be Y_UP
+        else // destination must be Y_UP
         {
-            matrix.set(0.0, 0.0, 1.0, 0.0,
-                       -1.0, 0.0, 0.0, 0.0,
-                       0.0, -1.0, 0.0, 0.0,
+            matrix.set(1.0, 0.0, 0.0, 0.0,
+                       0.0, 0.0, -1.0, 0.0,
+                       0.0, 1.0, 0.0, 0.0,
                        0.0, 0.0, 0.0, 1.0);
         }
     }
@@ -434,6 +439,12 @@ void ComputeTransform::apply(const Transform& transform)
 void ComputeTransform::apply(const MatrixTransform& mt)
 {
     matrix = matrix * mt.matrix;
+}
+
+void ComputeTransform::apply(const CoordinateFrame& cf)
+{
+    origin = cf.origin;
+    matrix = vsg::rotate(cf.rotation);
 }
 
 void ComputeTransform::apply(const Camera& camera)

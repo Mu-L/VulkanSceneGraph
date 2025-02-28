@@ -12,7 +12,6 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
 #include <vsg/commands/BindIndexBuffer.h>
 #include <vsg/core/compare.h>
-#include <vsg/io/Options.h>
 #include <vsg/vk/CommandBuffer.h>
 #include <vsg/vk/Context.h>
 
@@ -42,6 +41,12 @@ BindIndexBuffer::BindIndexBuffer(ref_ptr<Data> in_indices)
     assignIndices(in_indices);
 }
 
+BindIndexBuffer::BindIndexBuffer(VkIndexType in_indexType, ref_ptr<BufferInfo> in_indices) :
+    indexType(in_indexType),
+    indices(in_indices)
+{
+}
+
 BindIndexBuffer::~BindIndexBuffer()
 {
 }
@@ -51,7 +56,7 @@ int BindIndexBuffer::compare(const Object& rhs_object) const
     int result = Object::compare(rhs_object);
     if (result != 0) return result;
 
-    auto& rhs = static_cast<decltype(*this)>(rhs_object);
+    const auto& rhs = static_cast<decltype(*this)>(rhs_object);
     return compare_pointer(indices, rhs.indices);
 }
 

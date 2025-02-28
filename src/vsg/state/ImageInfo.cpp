@@ -11,7 +11,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 </editor-fold> */
 
 #include <vsg/core/compare.h>
-#include <vsg/io/Options.h>
+#include <vsg/io/Logger.h>
 #include <vsg/state/ImageInfo.h>
 
 #include <algorithm>
@@ -87,28 +87,78 @@ FormatTraits vsg::getFormatTraits(VkFormat format, bool default_one)
         case 2: traits.assign4<double>(default_one ? 1.0 : 0.0); break;
         }
     }
+    else if (format == VK_FORMAT_D16_UNORM)
+    {
+        traits.numBitsPerComponent = 16;
+        traits.numComponents = 1;
+        traits.size = 2;
+    }
+    else if (format == VK_FORMAT_D32_SFLOAT)
+    {
+        traits.numBitsPerComponent = 32;
+        traits.numComponents = 1;
+        traits.size = 4;
+    }
+    else if (format == VK_FORMAT_D16_UNORM_S8_UINT)
+    {
+        traits.numBitsPerComponent = 24;
+        traits.numComponents = 1;
+        traits.size = 3;
+    }
+    else if (format == VK_FORMAT_D24_UNORM_S8_UINT)
+    {
+        traits.numBitsPerComponent = 32;
+        traits.numComponents = 1;
+        traits.size = 4;
+    }
+    else if (format == VK_FORMAT_D32_SFLOAT_S8_UINT)
+    {
+        traits.numBitsPerComponent = 40;
+        traits.numComponents = 1;
+        traits.size = 5;
+    }
+    else
+    {
+        info("getFormatTraits(", format, ") unhandled.");
+    }
 
     return traits;
 }
 
 uint32_t vsg::computeNumMipMapLevels(const Data* data, const Sampler* sampler)
 {
-    uint32_t mipLevels = sampler != nullptr ? static_cast<uint32_t>(ceil(sampler->maxLod)) : 1;
-    if (mipLevels == 0)
+    uint32_t mipLevels = 1;
+    if (sampler)
     {
-        mipLevels = 1;
-    }
-
-    // clamp the mipLevels so that its no larger than what the data dimensions support
-    uint32_t maxDimension = std::max({data->width(), data->height(), data->depth()});
-    while ((1u << (mipLevels - 1)) > maxDimension)
-    {
-        --mipLevels;
+        // clamp the mipLevels so that it's no larger than what the data dimensions support
+        uint32_t maxDimension = std::max({data->width(), data->height(), data->depth()});
+        if (sampler->maxLod == VK_LOD_CLAMP_NONE)
+        {
+            while ((1u << mipLevels) <= maxDimension)
+            {
+                ++mipLevels;
+            }
+        }
+        else if (static_cast<uint32_t>(sampler->maxLod) > 1)
+        {
+            mipLevels = static_cast<uint32_t>(sampler->maxLod);
+            while ((1u << (mipLevels - 1)) > maxDimension)
+            {
+                --mipLevels;
+            }
+        }
     }
 
     //mipLevels = 1;  // disable mipmapping
 
     return mipLevels;
+}
+
+ImageInfo::ImageInfo(ref_ptr<Sampler> in_sampler, ref_ptr<ImageView> in_imageView, VkImageLayout in_imageLayout) :
+    sampler(in_sampler),
+    imageView(in_imageView),
+    imageLayout(in_imageLayout)
+{
 }
 
 ImageInfo::~ImageInfo()
@@ -120,7 +170,7 @@ int ImageInfo::compare(const Object& rhs_object) const
     int result = Object::compare(rhs_object);
     if (result != 0) return result;
 
-    auto& rhs = static_cast<decltype(*this)>(rhs_object);
+    const auto& rhs = static_cast<decltype(*this)>(rhs_object);
 
     if ((result = compare_pointer(sampler, rhs.sampler))) return result;
     if ((result = compare_pointer(imageView, rhs.imageView))) return result;
@@ -136,22 +186,25 @@ void ImageInfo::computeNumMipMapLevels()
         auto mipLevels = vsg::computeNumMipMapLevels(data, sampler);
 
         const auto& mipmapOffsets = image->data->computeMipmapOffsets();
-        bool generatMipmaps = (mipLevels > 1) && (mipmapOffsets.size() <= 1);
+        bool generateMipmaps = (mipLevels > 1) && (mipmapOffsets.size() <= 1);
 
-        if (generatMipmaps)
+        if (generateMipmaps)
         {
             // check that the data isn't compressed.
             const auto& properties = data->properties;
             if (properties.blockWidth > 1 || properties.blockHeight > 1 || properties.blockDepth > 1)
             {
-                sampler->maxLod = 0.0f;
+                if (sampler->maxLod != 0.0f && sampler->maxLod != VK_LOD_CLAMP_NONE)
+                {
+                    warn("ImageInfo::computeNumMipMapLevels() cannot enable generated mipmaps for vsg::Image, but Sampler::maxLod is not zero or VK_LOD_CLAMP_NONE, sampler->maxLod = ", sampler->maxLod);
+                }
+
                 mipLevels = 1;
             }
         }
 
         image->mipLevels = mipLevels;
-        imageView->subresourceRange.levelCount = mipLevels;
 
-        if (generatMipmaps) image->usage |= VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
+        if (generateMipmaps) image->usage |= VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
     }
 }

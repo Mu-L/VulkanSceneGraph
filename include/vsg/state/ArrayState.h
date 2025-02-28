@@ -22,22 +22,22 @@ namespace vsg
 {
 
     /// ArrayState base class provides a mechanism for CPU mapping of array data that is processed in novel ways on the GPU.
-    /// Assigned to StategGroup that are associated GraphicsPipline that use vertex shaders with novel vertex processing,
-    /// and used during traversal such as ComputeTraversal and IntersectionTraversal.
+    /// Assigned to StateGroup with an associated GraphicsPipeline that uses vertex shaders with novel vertex processing,
+    /// and used during traversals such as ComputeBounds and Intersector.
     class VSG_DECLSPEC ArrayState : public Inherit<ConstVisitor, ArrayState>
     {
     public:
         ArrayState() = default;
-        ArrayState(const ArrayState&) = default;
+        ArrayState(const ArrayState& rhs, const CopyOp& copyop = {});
 
         /// clone self
-        virtual ref_ptr<ArrayState> clone()
+        virtual ref_ptr<ArrayState> cloneArrayState()
         {
             return ArrayState::create(*this);
         }
 
         // clone the specified ArrayState
-        virtual ref_ptr<ArrayState> clone(ref_ptr<ArrayState> arrayState)
+        virtual ref_ptr<ArrayState> cloneArrayState(ref_ptr<ArrayState> arrayState)
         {
             return ArrayState::create(*arrayState);
         }
@@ -50,6 +50,9 @@ namespace vsg
             uint32_t offset = 0;
             VkVertexInputRate inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
         };
+
+        std::vector<dmat4> localToWorldStack;
+        std::vector<dmat4> worldToLocalStack;
 
         VkPrimitiveTopology topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
         uint32_t vertex_attribute_location = 0;
@@ -69,6 +72,7 @@ namespace vsg
         void apply(const InputAssemblyState& ias) override;
 
         void apply(const Geometry& geometry) override;
+        void apply(const VertexDraw& vid) override;
         void apply(const VertexIndexDraw& vid) override;
         void apply(const BindVertexBuffers& bvb) override;
         void apply(const BufferInfo& bufferInfo) override;
@@ -85,9 +89,9 @@ namespace vsg
     };
     VSG_type_name(vsg::ArrayState);
 
-    /// NullArrayState provides a mechanism for geometry in a subgraph to be ignored by traversals that use ArrayState such as ComputeBounds/Intersection/LineSegmentIntersector
+    /// NullArrayState provides a mechanism for geometry in a subgraph to be ignored by traversals that use ArrayState such as ComputeBounds/Intersector/LineSegmentIntersector
     /// this is useful for subgraphs that have custom shaders that move the final rendered geometry to a different place that would be naively interpreted by a straight forward vec3Array vertex array in local coordinates.
-    /// To disable the handling of geometry in a subgraph simple assign a NullArrayState to the StateGroup::prototypeArrayState, i.e.
+    /// To disable the handling of geometry in a subgraph simply assign a NullArrayState to the StateGroup::prototypeArrayState, i.e.
     ///     stateGroup->prototypeArrayState = vsg::NullArrayState::create();
     class VSG_DECLSPEC NullArrayState : public Inherit<ArrayState, NullArrayState>
     {
@@ -95,8 +99,8 @@ namespace vsg
         NullArrayState();
         explicit NullArrayState(const ArrayState& as);
 
-        ref_ptr<ArrayState> clone() override;
-        ref_ptr<ArrayState> clone(ref_ptr<ArrayState> arrayState) override;
+        ref_ptr<ArrayState> cloneArrayState() override;
+        ref_ptr<ArrayState> cloneArrayState(ref_ptr<ArrayState> arrayState) override;
 
         using ArrayState::apply;
 
@@ -105,7 +109,7 @@ namespace vsg
     };
     VSG_type_name(vsg::NullArrayState);
 
-    /// PositionArrayState is ArrayState subclass for mapping vertex array data for instanced geometries.
+    /// PositionArrayState is an ArrayState subclass for mapping vertex array data for instanced geometries.
     class VSG_DECLSPEC PositionArrayState : public Inherit<ArrayState, PositionArrayState>
     {
     public:
@@ -113,8 +117,8 @@ namespace vsg
         PositionArrayState(const PositionArrayState& rhs);
         explicit PositionArrayState(const ArrayState& rhs);
 
-        ref_ptr<ArrayState> clone() override;
-        ref_ptr<ArrayState> clone(ref_ptr<ArrayState> arrayState) override;
+        ref_ptr<ArrayState> cloneArrayState() override;
+        ref_ptr<ArrayState> cloneArrayState(ref_ptr<ArrayState> arrayState) override;
 
         uint32_t position_attribute_location = 4;
         AttributeDetails positionAttribute;
@@ -126,7 +130,7 @@ namespace vsg
     };
     VSG_type_name(vsg::PositionArrayState);
 
-    /// DisplacementMapArrayState is ArrayState subclass for mapping vertex array data for displacement mapped geometries.
+    /// DisplacementMapArrayState is an ArrayState subclass for mapping vertex array data for displacement mapped geometries.
     class VSG_DECLSPEC DisplacementMapArrayState : public Inherit<ArrayState, DisplacementMapArrayState>
     {
     public:
@@ -134,8 +138,8 @@ namespace vsg
         DisplacementMapArrayState(const DisplacementMapArrayState& rhs);
         explicit DisplacementMapArrayState(const ArrayState& rhs);
 
-        ref_ptr<ArrayState> clone() override;
-        ref_ptr<ArrayState> clone(ref_ptr<ArrayState> arrayState) override;
+        ref_ptr<ArrayState> cloneArrayState() override;
+        ref_ptr<ArrayState> cloneArrayState(ref_ptr<ArrayState> arrayState) override;
 
         // binding of displacement map
         uint32_t normal_attribute_location = 1;
@@ -160,7 +164,7 @@ namespace vsg
     };
     VSG_type_name(vsg::DisplacementMapArrayState);
 
-    /// PositionAndDisplacementMapArrayState is ArrayState subclass for mapping vertex array data for instanced, displacement mapped geometries.
+    /// PositionAndDisplacementMapArrayState is an ArrayState subclass for mapping vertex array data for instanced, displacement mapped geometries.
     class VSG_DECLSPEC PositionAndDisplacementMapArrayState : public Inherit<DisplacementMapArrayState, PositionAndDisplacementMapArrayState>
     {
     public:
@@ -171,12 +175,33 @@ namespace vsg
         uint32_t position_attribute_location = 4;
         AttributeDetails positionAttribute;
 
-        ref_ptr<ArrayState> clone() override;
-        ref_ptr<ArrayState> clone(ref_ptr<ArrayState> arrayState) override;
+        ref_ptr<ArrayState> cloneArrayState() override;
+        ref_ptr<ArrayState> cloneArrayState(ref_ptr<ArrayState> arrayState) override;
 
         void apply(const VertexInputState& vas) override;
         ref_ptr<const vec3Array> vertexArray(uint32_t instanceIndex) override;
     };
     VSG_type_name(vsg::PositionAndDisplacementMapArrayState);
+
+    /// BillboardArrayState is an ArrayState subclass for mapping vertex array data for billboard instanced geometries.
+    class VSG_DECLSPEC BillboardArrayState : public Inherit<ArrayState, BillboardArrayState>
+    {
+    public:
+        BillboardArrayState();
+        BillboardArrayState(const BillboardArrayState& rhs);
+        explicit BillboardArrayState(const ArrayState& rhs);
+
+        ref_ptr<ArrayState> cloneArrayState() override;
+        ref_ptr<ArrayState> cloneArrayState(ref_ptr<ArrayState> arrayState) override;
+
+        uint32_t position_attribute_location = 4;
+        AttributeDetails positionAttribute;
+
+        using ArrayState::apply;
+
+        void apply(const VertexInputState& vas) override;
+        ref_ptr<const vec3Array> vertexArray(uint32_t instanceIndex) override;
+    };
+    VSG_type_name(vsg::BillboardArrayState);
 
 } // namespace vsg

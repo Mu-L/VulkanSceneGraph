@@ -12,10 +12,17 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
 </editor-fold> */
 
+#include <vsg/maths/vec2.h>
 #include <vsg/vk/DescriptorPool.h>
 
 namespace vsg
 {
+
+    enum DataTransferHint
+    {
+        COMPILE_TRAVERSAL_TRANSFER_DATA_AND_WAIT,
+        COMPILE_TRAVERSAL_USE_TRANSFER_TASK
+    };
 
     /// ResourceHints provides settings that help preallocation of Vulkan resources and memory.
     class VSG_DECLSPEC ResourceHints : public Inherit<Object, ResourceHints>
@@ -32,6 +39,17 @@ namespace vsg
         VkDeviceSize minimumBufferSize = 16 * 1024 * 1024;
         VkDeviceSize minimumDeviceMemorySize = 16 * 1024 * 1024;
 
+        VkDeviceSize minimumStagingBufferSize = 16 * 1024 * 1024;
+
+        uivec2 numLightsRange = {8, 1024};
+        uivec2 numShadowMapsRange = {0, 64};
+        uivec2 shadowMapSize = {2048, 2048};
+
+        uint32_t numDatabasePagerReadThreads = 4;
+
+        DataTransferHint dataTransferHint = COMPILE_TRAVERSAL_USE_TRANSFER_TASK;
+
+    public:
         void read(Input& input) override;
         void write(Output& output) const override;
 

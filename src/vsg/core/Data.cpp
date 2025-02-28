@@ -13,10 +13,32 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 #include <vsg/core/Allocator.h>
 #include <vsg/core/Data.h>
 #include <vsg/io/Input.h>
-#include <vsg/io/Options.h>
 #include <vsg/io/Output.h>
 
 using namespace vsg;
+
+int Data::Properties::compare(const Properties& rhs) const
+{
+    return compare_memory(*this, rhs);
+}
+
+Data::Properties& Data::Properties::operator=(const Properties& rhs)
+{
+    if (&rhs == this) return *this;
+
+    format = rhs.format;
+    if (rhs.stride != 0) stride = rhs.stride;
+    maxNumMipmaps = rhs.maxNumMipmaps;
+    blockWidth = rhs.blockWidth;
+    blockHeight = rhs.blockHeight;
+    blockDepth = rhs.blockDepth;
+    origin = rhs.origin;
+    imageViewType = rhs.imageViewType;
+    dataVariance = rhs.dataVariance;
+    allocatorType = rhs.allocatorType;
+
+    return *this;
+}
 
 void* Data::operator new(std::size_t count)
 {
@@ -26,6 +48,26 @@ void* Data::operator new(std::size_t count)
 void Data::operator delete(void* ptr)
 {
     vsg::deallocate(ptr);
+}
+
+int Data::compare(const Object& rhs_object) const
+{
+    int result = Object::compare(rhs_object);
+    if (result != 0) return result;
+
+    auto& rhs = static_cast<decltype(*this)>(rhs_object);
+
+    if ((result = properties.compare(rhs.properties))) return result;
+
+    // the shorter data is less
+    if (dataSize() < rhs.dataSize()) return -1;
+    if (dataSize() > rhs.dataSize()) return 1;
+
+    // if both empty then they must be equal
+    if (dataSize() == 0) return 0;
+
+    // use memcpy to compare the contents of the data
+    return std::memcmp(dataPointer(), rhs.dataPointer(), dataSize());
 }
 
 void Data::read(Input& input)
@@ -72,10 +114,11 @@ void Data::write(Output& output) const
 
 Data::MipmapOffsets Data::computeMipmapOffsets() const
 {
+    if (properties.maxNumMipmaps <= 1) return {};
+
     uint32_t numMipmaps = properties.maxNumMipmaps;
 
     MipmapOffsets offsets;
-    if (numMipmaps == 0) return offsets;
 
     std::size_t w = width();
     std::size_t h = height();

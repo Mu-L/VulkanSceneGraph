@@ -10,13 +10,20 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
 </editor-fold> */
 
-#include <vsg/io/Options.h>
 #include <vsg/io/stream.h>
 #include <vsg/nodes/DepthSorted.h>
 
 using namespace vsg;
 
 DepthSorted::DepthSorted()
+{
+}
+
+DepthSorted::DepthSorted(const DepthSorted& rhs, const CopyOp& copyop) :
+    Inherit(rhs, copyop),
+    binNumber(rhs.binNumber),
+    bound(rhs.bound),
+    child(copyop(rhs.child))
 {
 }
 
@@ -29,6 +36,17 @@ DepthSorted::DepthSorted(int32_t in_binNumber, const dsphere& in_bound, ref_ptr<
 
 DepthSorted::~DepthSorted()
 {
+}
+
+int DepthSorted::compare(const Object& rhs_object) const
+{
+    int result = Node::compare(rhs_object);
+    if (result != 0) return result;
+
+    const auto& rhs = static_cast<decltype(*this)>(rhs_object);
+    if ((result = compare_value(binNumber, rhs.binNumber)) != 0) return result;
+    if ((result = compare_value(bound, rhs.bound)) != 0) return result;
+    return compare_pointer(child, rhs.child);
 }
 
 void DepthSorted::read(Input& input)

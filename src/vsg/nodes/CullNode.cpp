@@ -10,13 +10,19 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
 </editor-fold> */
 
-#include <vsg/io/Options.h>
 #include <vsg/io/stream.h>
 #include <vsg/nodes/CullNode.h>
 
 using namespace vsg;
 
 CullNode::CullNode()
+{
+}
+
+CullNode::CullNode(const CullNode& rhs, const CopyOp& copyop) :
+    Inherit(rhs, copyop),
+    bound(rhs.bound),
+    child(copyop(rhs.child))
 {
 }
 
@@ -28,6 +34,16 @@ CullNode::CullNode(const dsphere& in_bound, Node* in_child) :
 
 CullNode::~CullNode()
 {
+}
+
+int CullNode::compare(const Object& rhs_object) const
+{
+    int result = Node::compare(rhs_object);
+    if (result != 0) return result;
+
+    const auto& rhs = static_cast<decltype(*this)>(rhs_object);
+    if ((result = compare_value(bound, rhs.bound)) != 0) return result;
+    return compare_pointer(child, rhs.child);
 }
 
 void CullNode::read(Input& input)

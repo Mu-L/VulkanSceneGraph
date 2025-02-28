@@ -13,13 +13,14 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 </editor-fold> */
 
 #include <map>
+#include <vsg/io/Logger.h>
 #include <vsg/vk/PhysicalDevice.h>
 
 namespace vsg
 {
 
-    /// DeviceFeatures is a container class for setting up Vulkan features structures to be passed in vsg::Device creation.
-    /// Automatically deletes associated created feature structures on destructions.
+    /// DeviceFeatures is a container class for setting up Vulkan feature structures to be passed in vsg::Device creation.
+    /// Automatically deletes associated created feature structures on destruction.
     class VSG_DECLSPEC DeviceFeatures : public Inherit<Object, DeviceFeatures>
     {
     public:
@@ -36,14 +37,15 @@ namespace vsg
         template<typename FeatureStruct, VkStructureType type>
         FeatureStruct& get()
         {
-            if (auto itr = _features.find(type); itr != _features.end()) return *reinterpret_cast<FeatureStruct*>(itr->second);
+            if (auto itr = _features.find(type); itr != _features.end()) return *reinterpret_cast<FeatureStruct*>(itr->second.first);
 
             FeatureStruct* feature = new FeatureStruct{};
 
             feature->sType = type;
             feature->pNext = nullptr;
 
-            _features[type] = reinterpret_cast<FeatureHeader*>(feature);
+            _features[type].first = reinterpret_cast<FeatureHeader*>(feature);
+            _features[type].second = [](FeatureHeader* ptr) { delete reinterpret_cast<FeatureStruct*>(ptr); };
 
             return *feature;
         }
@@ -70,7 +72,9 @@ namespace vsg
             void* pNext;
         };
 
-        std::map<VkStructureType, FeatureHeader*> _features;
+        using DeleteHandler = void (*)(FeatureHeader* ptr);
+
+        std::map<VkStructureType, std::pair<FeatureHeader*, DeleteHandler>> _features;
     };
     VSG_type_name(vsg::DeviceFeatures);
 

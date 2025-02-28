@@ -5,7 +5,8 @@
 
 using namespace vsg;
 
-SharedObjects::SharedObjects()
+SharedObjects::SharedObjects() :
+    suitableForSharing(SuitableForSharing::create())
 {
 }
 
@@ -77,7 +78,7 @@ void SharedObjects::prune()
 
     auto loadedObject_id = std::type_index(typeid(LoadedObject));
 
-    // record observer pointers for each LoadedOjbect object so we can clear them to prevent local references keeping them from being pruned
+    // record observer pointers for each LoadedObject object so we can clear them to prevent local references keeping them from being pruned
     auto& loadedObjects = _sharedObjects[loadedObject_id];
     std::vector<observer_ptr<Object>> observedLoadedObjects(loadedObjects.size());
     auto observedLoadedObject_itr = observedLoadedObjects.begin();
@@ -97,7 +98,7 @@ void SharedObjects::prune()
     }
     _defaults.clear();
 
-    // prune SharedObjects that don't have an external references (referenceCount != 1)
+    // prune SharedObjects that don't have external references (referenceCount == 1)
     bool prunedObjects = false;
     do
     {
@@ -140,12 +141,12 @@ void SharedObjects::prune()
     }
 
     // reassign any default objects that still have references
-    for (auto& observerDefault : observedDefaults)
+    for (const auto& observerDefault : observedDefaults)
     {
         ref_ptr<Object> defaultObject = observerDefault;
         if (defaultObject)
         {
-            auto& object = *defaultObject;
+            const auto& object = *defaultObject;
             _defaults[std::type_index(typeid(object))] = defaultObject;
         }
     }
@@ -171,4 +172,50 @@ void SharedObjects::report(std::ostream& out)
                 << " " << object->referenceCount() << std::endl;
         }
     }
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+//
+// LoadedObject
+//
+LoadedObject::LoadedObject(const Path& in_filename, ref_ptr<const Options> in_options, ref_ptr<Object> in_object) :
+    filename(in_filename),
+    options(Options::create_if(in_options, *in_options)),
+    object(in_object)
+{
+    if (options) options->sharedObjects = {};
+}
+
+void LoadedObject::traverse(Visitor& visitor)
+{
+    if (object) object->accept(visitor);
+}
+void LoadedObject::traverse(ConstVisitor& visitor) const
+{
+    if (object) object->accept(visitor);
+}
+
+int LoadedObject::compare(const Object& rhs_object) const
+{
+    int result = Object::compare(rhs_object);
+    if (result != 0) return result;
+
+    auto& rhs = static_cast<decltype(*this)>(rhs_object);
+
+    if ((result = filename.compare(rhs.filename))) return result;
+    return compare_pointer(options, rhs.options);
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+//
+// SuitableForSharing
+//
+void SuitableForSharing::apply(const Object& object)
+{
+    if (suitableForSharing) object.traverse(*this);
+}
+
+void SuitableForSharing::apply(const PagedLOD&)
+{
+    suitableForSharing = false;
 }

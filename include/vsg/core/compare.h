@@ -68,7 +68,7 @@ namespace vsg
         if (lhs.empty()) return 0;
 
         auto rhs_itr = rhs.begin();
-        for (auto& object : lhs)
+        for (const auto& object : lhs)
         {
             int result = compare_pointer(object, *rhs_itr++);
             if (result != 0) return result;
@@ -103,7 +103,7 @@ namespace vsg
     }
 
     /// less functor for comparing ref_ptr<Object> typically used with std::set<> etc.
-    struct DerefenceLess
+    struct DereferenceLess
     {
         template<class P>
         bool operator()(const P& lhs, const P& rhs) const

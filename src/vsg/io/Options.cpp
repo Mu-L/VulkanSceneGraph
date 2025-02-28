@@ -15,6 +15,8 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 #include <vsg/state/DescriptorSetLayout.h>
 #include <vsg/threading/OperationThreads.h>
 #include <vsg/utils/CommandLine.h>
+#include <vsg/utils/FindDynamicObjects.h>
+#include <vsg/utils/PropagateDynamicObjects.h>
 #include <vsg/utils/ShaderSet.h>
 #include <vsg/utils/SharedObjects.h>
 
@@ -29,10 +31,13 @@ Options::Options()
     formatCoordinateConventions[".dae"] = CoordinateConvention::Y_UP;
     formatCoordinateConventions[".stl"] = CoordinateConvention::NO_PREFERENCE;
     formatCoordinateConventions[".obj"] = CoordinateConvention::NO_PREFERENCE;
+
+    findDynamicObjects = FindDynamicObjects::create();
+    propagateDynamicObjects = PropagateDynamicObjects::create();
 }
 
-Options::Options(const Options& options) :
-    Inherit(),
+Options::Options(const Options& options, const CopyOp& copyop) :
+    Inherit(options, copyop),
     sharedObjects(options.sharedObjects),
     readerWriters(options.readerWriters),
     operationThreads(options.operationThreads),
@@ -44,7 +49,11 @@ Options::Options(const Options& options) :
     mapRGBtoRGBAHint(options.mapRGBtoRGBAHint),
     sceneCoordinateConvention(options.sceneCoordinateConvention),
     formatCoordinateConventions(options.formatCoordinateConventions),
-    shaderSets(options.shaderSets)
+    shaderSets(options.shaderSets),
+    inheritedState(options.inheritedState),
+    instrumentation(options.instrumentation),
+    findDynamicObjects(options.findDynamicObjects),
+    propagateDynamicObjects(options.propagateDynamicObjects)
 {
     getOrCreateAuxiliary();
     // copy any meta data.
@@ -53,6 +62,24 @@ Options::Options(const Options& options) :
 
 Options::~Options()
 {
+}
+
+int Options::compare(const Object& rhs_object) const
+{
+    int result = Object::compare(rhs_object);
+    if (result != 0) return result;
+
+    const auto& rhs = static_cast<decltype(*this)>(rhs_object);
+
+    if ((result = compare_pointer_container(readerWriters, rhs.readerWriters))) return result;
+    if ((result = compare_value(checkFilenameHint, rhs.checkFilenameHint))) return result;
+    if ((result = compare_container(paths, rhs.paths))) return result;
+    if ((result = compare_value(fileCache, rhs.fileCache))) return result;
+    if ((result = compare_value(extensionHint, rhs.extensionHint))) return result;
+    if ((result = compare_value(mapRGBtoRGBAHint, rhs.mapRGBtoRGBAHint))) return result;
+    if ((result = compare_value(sceneCoordinateConvention, rhs.sceneCoordinateConvention))) return result;
+    if ((result = compare_value(formatCoordinateConventions, rhs.formatCoordinateConventions))) return result;
+    return compare_value(shaderSets, rhs.shaderSets);
 }
 
 void Options::read(Input& input)
@@ -101,7 +128,7 @@ void Options::write(Output& output) const
     output.writeObject("sharedObjects", sharedObjects);
 
     output.writeValue<uint32_t>("NumReaderWriters", readerWriters.size());
-    for (auto& rw : readerWriters)
+    for (const auto& rw : readerWriters)
     {
         output.writeObject("ReaderWriter", rw);
     }
@@ -110,7 +137,7 @@ void Options::write(Output& output) const
     output.writeValue<uint32_t>("checkFilenameHint", checkFilenameHint);
 
     output.writeValue<uint32_t>("NumPaths", paths.size());
-    for (auto& path : paths)
+    for (const auto& path : paths)
     {
         output.write("path", path);
     }
@@ -134,20 +161,21 @@ void Options::add(ref_ptr<ReaderWriter> rw)
 
 void Options::add(const ReaderWriters& rws)
 {
-    for (auto& rw : rws) add(rw);
+    for (const auto& rw : rws) add(rw);
 }
 
 bool Options::readOptions(CommandLine& arguments)
 {
-    bool read = false;
+    bool optionsRead = false;
     for (auto& readerWriter : readerWriters)
     {
-        if (readerWriter->readOptions(*this, arguments)) read = true;
+        if (readerWriter->readOptions(*this, arguments)) optionsRead = true;
     }
 
-    if (arguments.read("--file-cache", fileCache)) read = true;
+    if (arguments.read("--file-cache", fileCache)) optionsRead = true;
+    if (arguments.read("--extension-hint", extensionHint)) optionsRead = true;
 
-    return read;
+    return optionsRead;
 }
 
 ref_ptr<const vsg::Options> vsg::prependPathToOptionsIfRequired(const vsg::Path& filename, ref_ptr<const vsg::Options> options)

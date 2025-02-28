@@ -38,7 +38,7 @@ namespace vsg
     // forward declare
     class Options;
 
-    /// CommandLine provides a convenient way parse command line arguments.
+    /// CommandLine provides a convenient way to parse command line arguments.
     /// Almost all examples in vsgExamples use vsg::CommandLine so look to them for a usage guide.
     class VSG_DECLSPEC CommandLine
     {
@@ -57,6 +57,11 @@ namespace vsg
             if (i >= num_args) return false;
 
             if constexpr (std::is_same_v<T, std::string>)
+            {
+                v = _argv[i++];
+                return true;
+            }
+            if constexpr (std::is_same_v<T, vsg::Path>)
             {
                 v = _argv[i++];
                 return true;
@@ -97,16 +102,19 @@ namespace vsg
             {
                 // removed section is at end of argv so just reset argc to i
                 *_argc = i;
-                return;
             }
-
-            // shift all the remaining entries down to fill the removed space
-            for (; source < *_argc; ++i, ++source)
+            else
             {
-                _argv[i] = _argv[source];
-            }
+                // shift all the remaining entries down to fill the removed space
+                for (; source < *_argc; ++i, ++source)
+                {
+                    _argv[i] = _argv[source];
+                }
 
-            *_argc -= num;
+                *_argc -= num;
+            }
+            // Preserve C invariant that argv ends with a null pointer
+            _argv[*_argc] = nullptr;
         }
 
         template<typename... Args>
@@ -197,7 +205,7 @@ namespace vsg
         int writeErrorMessages(std::ostream& out) const
         {
             if (_errorMessages.empty()) return 1;
-            for (auto message : _errorMessages) out << message << std::endl;
+            for (const auto& message : _errorMessages) out << message << std::endl;
             return 0;
         }
 
@@ -207,5 +215,56 @@ namespace vsg
         std::istringstream _istr;
         Messages _errorMessages;
     };
+
+    // specialize handling of bool parameter
+    template<>
+    inline bool CommandLine::read(int& i, bool& v)
+    {
+        const int num_args = *_argc;
+        if (i >= num_args) return false;
+
+        const char* str = _argv[i];
+        if (!str) return false;
+
+        if (std::strcmp(str, "true") == 0 || std::strcmp(str, "True") == 0 || std::strcmp(str, "TRUE") == 0 || std::strcmp(str, "1") == 0)
+        {
+            v = true;
+            ++i;
+            return true;
+        }
+
+        if (std::strcmp(str, "false") == 0 || std::strcmp(str, "False") == 0 || std::strcmp(str, "FALSE") == 0 || std::strcmp(str, "0") == 0)
+        {
+            v = false;
+            ++i;
+            return true;
+        }
+        return false;
+    }
+
+    // specialize matching of bool parameters
+    template<>
+    inline bool CommandLine::read(const std::string& match, bool& v)
+    {
+        for (int i = 1; i < *_argc; ++i)
+        {
+            if (match == _argv[i])
+            {
+                int start = i;
+                ++i;
+
+                // match any parameters
+                if (!read(i, v))
+                {
+                    v = true;
+                }
+
+                remove(start, i - start);
+
+                return true;
+            }
+        }
+        return false;
+    }
 
 } // namespace vsg

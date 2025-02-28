@@ -12,12 +12,11 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
 </editor-fold> */
 
+#include <vsg/app/RecordTraversal.h>
 #include <vsg/core/ConstVisitor.h>
 #include <vsg/core/Visitor.h>
 #include <vsg/core/ref_ptr.h>
 #include <vsg/core/type_name.h>
-
-#include <vsg/viewer/RecordTraversal.h>
 
 namespace vsg
 {
@@ -30,25 +29,25 @@ namespace vsg
     public:
         template<typename... Args>
         Inherit(Args&&... args) :
-            ParentClass(args...) {}
+            ParentClass(std::forward<Args>(args)...) {}
 
         template<typename... Args>
         static ref_ptr<Subclass> create(Args&&... args)
         {
-            return ref_ptr<Subclass>(new Subclass(args...));
+            return ref_ptr<Subclass>(new Subclass(std::forward<Args>(args)...));
         }
 
         template<typename... Args>
         static ref_ptr<Subclass> create_if(bool flag, Args&&... args)
         {
-            if (flag) return ref_ptr<Subclass>(new Subclass(args...));
+            if (flag) return ref_ptr<Subclass>(new Subclass(std::forward<Args>(args)...));
             return {};
         }
 
         std::size_t sizeofObject() const noexcept override { return sizeof(Subclass); }
         const char* className() const noexcept override { return type_name<Subclass>(); }
         const std::type_info& type_info() const noexcept override { return typeid(Subclass); }
-        bool is_compatible(const std::type_info& type) const noexcept override { return typeid(Subclass) == type ? true : ParentClass::is_compatible(type); }
+        bool is_compatible(const std::type_info& type) const noexcept override { return typeid(Subclass) == type || ParentClass::is_compatible(type); }
 
         int compare(const Object& rhs) const override
         {

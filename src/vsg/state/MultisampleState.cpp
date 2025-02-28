@@ -11,7 +11,6 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 </editor-fold> */
 
 #include <vsg/core/compare.h>
-#include <vsg/io/Options.h>
 #include <vsg/state/MultisampleState.h>
 #include <vsg/vk/Context.h>
 
@@ -39,10 +38,10 @@ MultisampleState::~MultisampleState()
 
 int MultisampleState::compare(const Object& rhs_object) const
 {
-    int result = Object::compare(rhs_object);
+    int result = GraphicsPipelineState::compare(rhs_object);
     if (result != 0) return result;
 
-    auto& rhs = static_cast<decltype(*this)>(rhs_object);
+    const auto& rhs = static_cast<decltype(*this)>(rhs_object);
 
     if ((result = compare_value(rasterizationSamples, rhs.rasterizationSamples))) return result;
     if ((result = compare_value(sampleShadingEnable, rhs.sampleShadingEnable))) return result;
@@ -54,16 +53,20 @@ int MultisampleState::compare(const Object& rhs_object) const
 
 void MultisampleState::read(Input& input)
 {
-    Object::read(input);
+    GraphicsPipelineState::read(input);
 
     input.readValue<uint32_t>("rasterizationSamples", rasterizationSamples);
     input.readValue<uint32_t>("sampleShadingEnable", sampleShadingEnable);
     input.read("minSampleShading", minSampleShading);
 
-    sampleMasks.resize(input.readValue<uint32_t>("NumSampleMask")); // TODO review capitalization
-    for (auto& mask : sampleMasks)
+    if (input.version_greater_equal(0, 7, 3))
+        sampleMasks.resize(input.readValue<uint32_t>("sampleMasks"));
+    else
+        sampleMasks.resize(input.readValue<uint32_t>("NumSampleMask"));
+
+    for (auto& value : sampleMasks)
     {
-        input.readValue<uint32_t>("value", mask);
+        input.readValue<uint32_t>("value", value);
     }
 
     input.readValue<uint32_t>("alphaToCoverageEnable", alphaToCoverageEnable);
@@ -72,16 +75,20 @@ void MultisampleState::read(Input& input)
 
 void MultisampleState::write(Output& output) const
 {
-    Object::write(output);
+    GraphicsPipelineState::write(output);
 
     output.writeValue<uint32_t>("rasterizationSamples", rasterizationSamples);
     output.writeValue<uint32_t>("sampleShadingEnable", sampleShadingEnable);
     output.write("minSampleShading", minSampleShading);
 
-    output.writeValue<uint32_t>("NumSampleMask", sampleMasks.size()); // TODO review capitalization
-    for (auto& mask : sampleMasks)
+    if (output.version_greater_equal(0, 7, 3))
+        output.writeValue<uint32_t>("sampleMasks", sampleMasks.size());
+    else
+        output.writeValue<uint32_t>("NumSampleMask", sampleMasks.size());
+
+    for (auto& value : sampleMasks)
     {
-        output.writeValue<uint32_t>("value", mask);
+        output.writeValue<uint32_t>("value", value);
     }
 
     output.writeValue<uint32_t>("alphaToCoverageEnable", alphaToCoverageEnable);

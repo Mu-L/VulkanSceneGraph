@@ -12,15 +12,15 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
 </editor-fold> */
 
+#include <vsg/app/Camera.h>
 #include <vsg/core/Visitor.h>
 #include <vsg/maths/transform.h>
-#include <vsg/viewer/Camera.h>
 
 #include <stack>
 
 namespace vsg
 {
-    //** Traverse the scene graph loading any PLOD that are required for a camera view.*/
+    // Traverse the scene graph loading any PLOD that are required for a camera view.
     class VSG_DECLSPEC LoadPagedLOD : public vsg::Visitor
     {
     public:

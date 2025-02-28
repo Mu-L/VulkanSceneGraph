@@ -10,7 +10,6 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
 </editor-fold> */
 
-#include <vsg/io/Options.h>
 #include <vsg/utils/CommandLine.h>
 
 using namespace vsg;
@@ -23,5 +22,5 @@ CommandLine::CommandLine(int* argc, char** argv) :
 
 bool CommandLine::read(Options* options)
 {
-    return (options) ? options->readOptions(*this) : false;
+    return (options != nullptr) && options->readOptions(*this);
 }

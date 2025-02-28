@@ -12,10 +12,10 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
 #include <vsg/core/Exception.h>
 #include <vsg/core/Version.h>
-#include <vsg/io/Options.h>
-#include <vsg/viewer/Window.h>
+#include <vsg/io/Logger.h>
+#include <vsg/vk/DescriptorPools.h>
 #include <vsg/vk/Device.h>
-#include <vsg/vk/Extensions.h>
+#include <vsg/vk/MemoryBufferPools.h>
 
 #include <cstring>
 #include <set>
@@ -53,6 +53,7 @@ static void releaseDeviceID(uint32_t deviceID)
 
 Device::Device(PhysicalDevice* physicalDevice, const QueueSettings& queueSettings, Names layers, Names deviceExtensions, const DeviceFeatures* deviceFeatures, AllocationCallbacks* allocator) :
     deviceID(getUniqueDeviceID()),
+    enabledExtensions(deviceExtensions),
     _instance(physicalDevice->getInstance()),
     _physicalDevice(physicalDevice),
     _allocator(allocator)
@@ -63,6 +64,8 @@ Device::Device(PhysicalDevice* physicalDevice, const QueueSettings& queueSetting
         throw Exception{"Number of vsg:Device allocated exceeds number supported ", VSG_MAX_DEVICES};
     }
 
+    const auto& queueFamilyProperties = physicalDevice->getQueueFamilyProperties();
+
     std::vector<VkDeviceQueueCreateInfo> queueCreateInfos;
 
     float queuePriority = 1.0f;
@@ -70,9 +73,9 @@ Device::Device(PhysicalDevice* physicalDevice, const QueueSettings& queueSetting
     {
         if (queueSetting.queueFamilyIndex < 0) continue;
 
-        // check to see if the queueFamilyIndex has already been referenced or us unique
+        // check to see if the queueFamilyIndex has already been referenced or is unique
         bool unique = true;
-        for (auto& existingInfo : queueCreateInfos)
+        for (const auto& existingInfo : queueCreateInfos)
         {
             if (existingInfo.queueFamilyIndex == static_cast<uint32_t>(queueSetting.queueFamilyIndex)) unique = false;
         }
@@ -88,6 +91,13 @@ Device::Device(PhysicalDevice* physicalDevice, const QueueSettings& queueSetting
         {
             queueCreateInfo.queueCount = static_cast<uint32_t>(queueSetting.queuePiorities.size());
             queueCreateInfo.pQueuePriorities = queueSetting.queuePiorities.data();
+
+            uint32_t supportedQueueCount = queueFamilyProperties[queueSetting.queueFamilyIndex].queueCount;
+            if (queueCreateInfo.queueCount > supportedQueueCount)
+            {
+                queueCreateInfo.queueCount = supportedQueueCount;
+                debug("Device::Device() creation failed to create requested queueCount.");
+            }
         }
         else
         {
@@ -101,14 +111,8 @@ Device::Device(PhysicalDevice* physicalDevice, const QueueSettings& queueSetting
 
 #if defined(__APPLE__)
     // MacOS requires "VK_KHR_portability_subset" to be a requested extension if the PhysicalDevice supported it.
-    auto extensionProperties = _physicalDevice->enumerateDeviceExtensionProperties();
-    for (auto& extensionProperty : extensionProperties)
-    {
-        if (std::strncmp(extensionProperty.extensionName, VK_KHR_PORTABILITY_SUBSET_EXTENSION_NAME, VK_MAX_EXTENSION_NAME_SIZE) == 0)
-        {
-            deviceExtensions.push_back(extensionProperty.extensionName);
-        }
-    }
+    if (_physicalDevice->supportsDeviceExtension(VK_KHR_PORTABILITY_SUBSET_EXTENSION_NAME))
+        deviceExtensions.push_back(VK_KHR_PORTABILITY_SUBSET_EXTENSION_NAME);
 #endif
 
     VkDeviceCreateInfo createInfo = {};
@@ -134,7 +138,31 @@ Device::Device(PhysicalDevice* physicalDevice, const QueueSettings& queueSetting
         throw Exception{"Error: vsg::Device::create(...) failed to create logical device.", result};
     }
 
-    _extensions = Extensions::create(this);
+    // allocate the requested queues
+    for (auto queueInfo : queueCreateInfos)
+    {
+        for (uint32_t queueIndex = 0; queueIndex < queueInfo.queueCount; ++queueIndex)
+        {
+            VkQueue vk_queue;
+            vkGetDeviceQueue(_device, queueInfo.queueFamilyIndex, queueIndex, &vk_queue);
+
+            VkQueueFlags queueFlags = 0;
+
+            if (queueInfo.queueFamilyIndex < queueFamilyProperties.size())
+            {
+                queueFlags = queueFamilyProperties[queueInfo.queueFamilyIndex].queueFlags;
+            }
+            else
+            {
+                warn("vsg::Device::Device(..) constructor unable to match queue family flags to PhysicalDevice queueFamilyProperties.");
+            }
+
+            ref_ptr<Queue> queue(new Queue(vk_queue, queueFlags, queueInfo.queueFamilyIndex, queueIndex));
+            _queues.emplace_back(queue);
+        }
+    }
+
+    _extensions = DeviceExtensions::create(this);
 }
 
 Device::~Device()
@@ -159,11 +187,21 @@ ref_ptr<Queue> Device::getQueue(uint32_t queueFamilyIndex, uint32_t queueIndex)
         if (queue->queueFamilyIndex() == queueFamilyIndex && queue->queueIndex() == queueIndex) return queue;
     }
 
-    VkQueue vk_queue;
-    vkGetDeviceQueue(_device, queueFamilyIndex, queueIndex, &vk_queue);
+    for (auto& queue : _queues)
+    {
+        if (queue->queueFamilyIndex() == queueFamilyIndex) return queue;
+    }
 
-    ref_ptr<Queue> queue(new Queue(vk_queue, queueFamilyIndex, queueIndex));
-    _queues.emplace_back(queue);
+    return {};
+}
 
-    return queue;
+bool Device::supportsApiVersion(uint32_t version) const
+{
+    return getInstance()->apiVersion >= version && _physicalDevice->getProperties().apiVersion >= version;
+}
+
+bool Device::supportsDeviceExtension(const char* extensionName) const
+{
+    auto compare = [&](const char* rhs) { return strcmp(extensionName, rhs) == 0; };
+    return (std::find_if(enabledExtensions.begin(), enabledExtensions.end(), compare) != enabledExtensions.end());
 }

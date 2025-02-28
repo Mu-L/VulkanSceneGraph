@@ -12,20 +12,21 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
 </editor-fold> */
 
+#include <vsg/app/Window.h>
 #include <vsg/core/observer_ptr.h>
 #include <vsg/ui/WindowEvent.h>
-#include <vsg/viewer/Window.h>
 
 namespace vsg
 {
 
     enum ButtonMask : uint16_t
     {
+        BUTTON_MASK_OFF = 0,
         BUTTON_MASK_1 = 256,
         BUTTON_MASK_2 = 512,
         BUTTON_MASK_3 = 1024,
-        BUTTON_MASK_4 = 2048, /// mouse wheel up
-        BUTTON_MASK_5 = 4096  /// mouse wheel down
+        BUTTON_MASK_4 = 2048,
+        BUTTON_MASK_5 = 4096
     };
 
     /// PointerEvent is a base class for mouse pointer events
@@ -42,14 +43,14 @@ namespace vsg
 
         int32_t x = 0;
         int32_t y = 0;
-        ButtonMask mask = {};
+        ButtonMask mask = BUTTON_MASK_OFF;
 
         void read(Input& input) override;
         void write(Output& output) const override;
     };
     VSG_type_name(vsg::PointerEvent);
 
-    /// ButtonPressEvent represent a button press event.
+    /// ButtonPressEvent represents a button press event.
     class VSG_DECLSPEC ButtonPressEvent : public Inherit<PointerEvent, ButtonPressEvent>
     {
     public:
@@ -66,7 +67,7 @@ namespace vsg
     };
     VSG_type_name(vsg::ButtonPressEvent);
 
-    /// ButtonReleaseEvent represent a button release event.
+    /// ButtonReleaseEvent represents a button release event.
     class VSG_DECLSPEC ButtonReleaseEvent : public Inherit<PointerEvent, ButtonReleaseEvent>
     {
     public:
@@ -76,14 +77,14 @@ namespace vsg
             Inherit(in_window, in_time, in_x, in_y, in_buttonMask),
             button(in_button) {}
 
-        uint32_t button;
+        uint32_t button = 0;
 
         void read(Input& input) override;
         void write(Output& output) const override;
     };
     VSG_type_name(vsg::ButtonReleaseEvent);
 
-    /// MoveEvent represent a button move event.
+    /// MoveEvent represents a pointer move event.
     class MoveEvent : public Inherit<PointerEvent, MoveEvent>
     {
     public:

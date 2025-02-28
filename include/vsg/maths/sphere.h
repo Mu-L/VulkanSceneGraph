@@ -12,7 +12,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
 </editor-fold> */
 
-// we can't implement the anonymous union/structs combination without causing warnings, so disabled them for just this header
+// we can't implement the anonymous union/structs combination without causing warnings, so disable them for just this header
 #if defined(__GNUC__)
 #    pragma GCC diagnostic push
 #    pragma GCC diagnostic ignored "-Wpedantic"
@@ -108,15 +108,46 @@ namespace vsg
 
         bool valid() const { return radius >= 0.0; }
 
+        explicit operator bool() const noexcept { return valid(); }
+
         T* data() { return value; }
         const T* data() const { return value; }
+
+        void reset()
+        {
+            center.set(0.0, 0.0, 0.0);
+            radius = -1.0;
+        }
     };
 
-    using sphere = t_sphere<float>;   /// float sphere class
-    using dsphere = t_sphere<double>; /// double sphere class
+    using sphere = t_sphere<float>;         /// float sphere class
+    using dsphere = t_sphere<double>;       /// double sphere class
+    using ldsphere = t_sphere<long double>; /// long double sphere class
 
     VSG_type_name(vsg::sphere);
     VSG_type_name(vsg::dsphere);
+    VSG_type_name(vsg::ldsphere);
+
+    template<typename T>
+    constexpr bool operator==(const t_sphere<T>& lhs, const t_sphere<T>& rhs)
+    {
+        return (lhs.center == rhs.center) && (lhs.radius == rhs.radius);
+    }
+
+    template<typename T>
+    constexpr bool operator!=(const t_sphere<T>& lhs, const t_sphere<T>& rhs)
+    {
+        return (lhs.center != rhs.center) || (lhs.radius != rhs.radius);
+    }
+
+    template<typename T>
+    constexpr bool operator<(const t_sphere<T>& lhs, const t_sphere<T>& rhs)
+    {
+        if (lhs.center < rhs.center) return true;
+        if (rhs.center < lhs.center) return false;
+        return lhs.radius < rhs.radius;
+    }
+
 } // namespace vsg
 
 #if defined(__clang__)

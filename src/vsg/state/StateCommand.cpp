@@ -11,10 +11,15 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 </editor-fold> */
 
 #include <vsg/core/compare.h>
-#include <vsg/io/Options.h>
 #include <vsg/state/StateCommand.h>
 
 using namespace vsg;
+
+StateCommand::StateCommand(const StateCommand& rhs, const CopyOp& copyop) :
+    Inherit(rhs, copyop),
+    slot(rhs.slot)
+{
+}
 
 void StateCommand::read(Input& input)
 {
@@ -28,7 +33,7 @@ int StateCommand::compare(const Object& rhs_object) const
     int result = Object::compare(rhs_object);
     if (result != 0) return result;
 
-    auto& rhs = static_cast<decltype(*this)>(rhs_object);
+    const auto& rhs = static_cast<decltype(*this)>(rhs_object);
     return compare_value(slot, rhs.slot);
 }
 

@@ -20,22 +20,13 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 #include <vsg/utils/ShaderCompiler.h>
 
 #if VSG_SUPPORTS_ShaderCompiler
+#    include <glslang/Public/ResourceLimits.h>
 #    include <glslang/Public/ShaderLang.h>
 #    include <glslang/SPIRV/GlslangToSpv.h>
+#endif
 
-#    include "ResourceLimits.cpp"
-#    include "ResourceLimits.h"
-
-#    if GLSLANG_EShLangRayGenNV
-// map NV variants to modern versions
-#        define GLSLANG_EShLangRayGen 1
-#        define EShLangRayGen EShLangRayGenNV
-#        define EShLangIntersect EShLangIntersectNV
-#        define EShLangAnyHit EShLangAnyHitNV
-#        define EShLangClosestHit EShLangClosestHitNV
-#        define EShLangMiss EShLangMissNV
-#        define EShLangCallable EShLangCallableNV
-#    endif
+#if VSG_SUPPORTS_ShaderOptimizer
+#    include <spirv-tools/optimizer.hpp>
 #endif
 
 #include <algorithm>
@@ -48,25 +39,61 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
 using namespace vsg;
 
+namespace
+{
 #if VSG_SUPPORTS_ShaderCompiler
-static std::atomic_uint s_intialized = 0;
+    static std::atomic_uint s_initialized = 0;
 
-static void s_initializeProcess()
-{
-    if (s_intialized.fetch_add(1) == 0)
+    static void s_initializeProcess()
     {
-        glslang::InitializeProcess();
+        if (s_initialized.fetch_add(1) == 0)
+        {
+            glslang::InitializeProcess();
+        }
     }
-}
 
-static void s_finalizeProcess()
-{
-    if (s_intialized.fetch_sub(1) == 1)
+    static void s_finalizeProcess()
     {
-        glslang::FinalizeProcess();
+        if (s_initialized.fetch_sub(1) == 1)
+        {
+            glslang::FinalizeProcess();
+        }
     }
-}
+
 #endif
+
+#if VSG_SUPPORTS_ShaderOptimizer
+    constexpr static spv_target_env selectTargetEnv(const ShaderCompileSettings& settings)
+    {
+        switch (settings.vulkanVersion)
+        {
+        case VK_MAKE_API_VERSION(0, 1, 0, 0):
+            return SPV_ENV_VULKAN_1_0;
+        case VK_MAKE_API_VERSION(0, 1, 1, 0):
+            switch (settings.target)
+            {
+            case ShaderCompileSettings::SPIRV_1_0:
+            case ShaderCompileSettings::SPIRV_1_1:
+            case ShaderCompileSettings::SPIRV_1_2:
+            case ShaderCompileSettings::SPIRV_1_3:
+                return SPV_ENV_VULKAN_1_1;
+            case ShaderCompileSettings::SPIRV_1_4:
+                return SPV_ENV_VULKAN_1_1_SPIRV_1_4;
+            default:
+                return SPV_ENV_VULKAN_1_1;
+            }
+        case VK_MAKE_API_VERSION(0, 1, 2, 0):
+            return SPV_ENV_VULKAN_1_2;
+        case VK_MAKE_API_VERSION(0, 1, 3, 0):
+            return SPV_ENV_VULKAN_1_3;
+        //case VK_MAKE_API_VERSION(0, 1, 4, 0):
+        //    return SPV_ENV_VULKAN_1_4;
+        default:
+            return SPV_ENV_UNIVERSAL_1_0;
+        }
+    }
+#endif
+} // namespace
 
 std::string debugFormatShaderSource(const std::string& source)
 {
@@ -126,8 +153,8 @@ bool ShaderCompiler::compile(ShaderStages& shaders, const std::vector<std::strin
         case (VK_SHADER_STAGE_MISS_BIT_KHR): return "Miss Shader";
         case (VK_SHADER_STAGE_INTERSECTION_BIT_KHR): return "Intersection Shader";
         case (VK_SHADER_STAGE_CALLABLE_BIT_KHR): return "Callable Shader";
-        case (VK_SHADER_STAGE_TASK_BIT_NV): return "Task Shader";
-        case (VK_SHADER_STAGE_MESH_BIT_NV): return "Mesh Shader";
+        case (VK_SHADER_STAGE_TASK_BIT_EXT): return "Task Shader";
+        case (VK_SHADER_STAGE_MESH_BIT_EXT): return "Mesh Shader";
         default: return "Unknown Shader Type";
         }
         return "";
@@ -137,7 +164,37 @@ bool ShaderCompiler::compile(ShaderStages& shaders, const std::vector<std::strin
     using TShaders = std::list<std::unique_ptr<glslang::TShader>>;
     TShaders tshaders;
 
-    TBuiltInResource builtInResources = glslang::DefaultTBuiltInResource;
+    auto builtInResources = GetDefaultResources();
+
+#    if VSG_SUPPORTS_ShaderOptimizer
+    auto optimizer = std::make_unique<spvtools::Optimizer>(selectTargetEnv(*defaults));
+    optimizer->SetMessageConsumer([](spv_message_level_t level, const char* source, const spv_position_t& position, const char* message) {
+        Logger::Level vsgLevel;
+        switch (level)
+        {
+        case SPV_MSG_FATAL:
+        case SPV_MSG_INTERNAL_ERROR:
+            vsgLevel = Logger::LOGGER_FATAL;
+            break;
+        case SPV_MSG_ERROR:
+            vsgLevel = Logger::LOGGER_ERROR;
+            break;
+        case SPV_MSG_WARNING:
+            vsgLevel = Logger::LOGGER_WARN;
+            break;
+        case SPV_MSG_INFO:
+            vsgLevel = Logger::LOGGER_INFO;
+            break;
+        case SPV_MSG_DEBUG:
+            vsgLevel = Logger::LOGGER_DEBUG;
+            break;
+        default:
+            vsgLevel = Logger::LOGGER_INFO;
+            break;
+        }
+        vsg::log(vsgLevel, "spvtools::Optimizer: ", source ? source : "", ", ", position.line, ", ", position.column, ", ", position.index, ", ", message ? message : "No message");
+    });
+#    endif
 
     StageShaderMap stageShaderMap;
     std::unique_ptr<glslang::TProgram> program(new glslang::TProgram);
@@ -156,7 +213,6 @@ bool ShaderCompiler::compile(ShaderStages& shaders, const std::vector<std::strin
         case (VK_SHADER_STAGE_GEOMETRY_BIT): envStage = EShLangGeometry; break;
         case (VK_SHADER_STAGE_FRAGMENT_BIT): envStage = EShLangFragment; break;
         case (VK_SHADER_STAGE_COMPUTE_BIT): envStage = EShLangCompute; break;
-#    ifdef GLSLANG_EShLangRayGen
         case (VK_SHADER_STAGE_RAYGEN_BIT_KHR):
             envStage = EShLangRayGen;
             minTargetLanguageVersion = glslang::EShTargetSpv_1_4;
@@ -181,9 +237,14 @@ bool ShaderCompiler::compile(ShaderStages& shaders, const std::vector<std::strin
             envStage = EShLangCallable;
             minTargetLanguageVersion = glslang::EShTargetSpv_1_4;
             break;
-#    endif
-        case (VK_SHADER_STAGE_TASK_BIT_NV): envStage = EShLangTaskNV; break;
-        case (VK_SHADER_STAGE_MESH_BIT_NV): envStage = EShLangMeshNV; break;
+        case (VK_SHADER_STAGE_TASK_BIT_EXT):
+            envStage = EShLangTask;
+            minTargetLanguageVersion = glslang::EShTargetSpv_1_4;
+            break;
+        case (VK_SHADER_STAGE_MESH_BIT_EXT):
+            envStage = EShLangMesh;
+            minTargetLanguageVersion = glslang::EShTargetSpv_1_4;
+            break;
 
         default: break;
         }
@@ -220,7 +281,11 @@ bool ShaderCompiler::compile(ShaderStages& shaders, const std::vector<std::strin
         shader->setStrings(&str, 1);
 
         EShMessages messages = EShMsgDefault;
-        bool parseResult = shader->parse(&builtInResources, settings->defaultVersion, settings->forwardCompatible, messages);
+        if (settings->generateDebugInfo)
+        {
+            messages = static_cast<EShMessages>(messages | EShMsgDebugInfo);
+        }
+        bool parseResult = shader->parse(builtInResources, settings->defaultVersion, settings->forwardCompatible, messages);
 
         if (parseResult)
         {
@@ -271,11 +336,38 @@ bool ShaderCompiler::compile(ShaderStages& shaders, const std::vector<std::strin
         auto vsg_shader = stageShaderMap[(EShLanguage)eshl_stage];
         if (vsg_shader && program->getIntermediate((EShLanguage)eshl_stage))
         {
-            ShaderModule::SPIRV spirv;
-            std::string warningsErrors;
+            auto settings = vsg_shader->module->hints ? vsg_shader->module->hints : defaults;
+
             spv::SpvBuildLogger logger;
+
             glslang::SpvOptions spvOptions;
+            if (settings)
+            {
+                spvOptions.generateDebugInfo = settings->generateDebugInfo;
+                if (spvOptions.generateDebugInfo)
+                {
+                    spvOptions.emitNonSemanticShaderDebugInfo = true;
+                    spvOptions.emitNonSemanticShaderDebugSource = true;
+                }
+            }
+
+            vsg_shader->module->code.clear();
             glslang::GlslangToSpv(*(program->getIntermediate((EShLanguage)eshl_stage)), vsg_shader->module->code, &logger, &spvOptions);
+
+#    if VSG_SUPPORTS_ShaderOptimizer
+            if (settings && optimizer && settings->optimize)
+            {
+                optimizer->SetTargetEnv(selectTargetEnv(*settings));
+                optimizer->RegisterPerformancePasses(true);
+                vsg::ShaderModule::SPIRV unoptimized(std::move(vsg_shader->module->code));
+                bool success = optimizer->Run(unoptimized.data(), unoptimized.size(), &vsg_shader->module->code);
+                if (!success)
+                {
+                    warn("Shader optimisation failed, reverting to unoptimised.");
+                    vsg_shader->module->code = std::move(unoptimized);
+                }
+            }
+#    endif
         }
     }
 
@@ -315,7 +407,7 @@ std::string ShaderCompiler::combineSourceAndDefines(const std::string& source, c
         size_t endpos = str.find_last_not_of(" \t\r\n");
         if (endpos != std::string::npos)
         {
-            str = str.substr(0, endpos + 1);
+            str.resize(endpos + 1);
         }
     };
 
@@ -420,16 +512,6 @@ void ShaderCompiler::apply(Node& node)
     node.traverse(*this);
 }
 
-void ShaderCompiler::apply(StateGroup& stategroup)
-{
-    for (auto& stateCommand : stategroup.stateCommands)
-    {
-        stateCommand->accept(*this);
-    }
-
-    stategroup.traverse(*this);
-}
-
 void ShaderCompiler::apply(BindGraphicsPipeline& bgp)
 {
     auto pipeline = bgp.pipeline;
@@ -437,7 +519,7 @@ void ShaderCompiler::apply(BindGraphicsPipeline& bgp)
 
     // compile shaders if required
     bool requiresShaderCompiler = false;
-    for (auto& shaderStage : pipeline->stages)
+    for (const auto& shaderStage : pipeline->stages)
     {
         if (shaderStage->module)
         {
@@ -477,7 +559,7 @@ void ShaderCompiler::apply(BindRayTracingPipeline& brtp)
 
     // compile shaders if required
     bool requiresShaderCompiler = false;
-    for (auto& shaderStage : pipeline->getShaderStages())
+    for (const auto& shaderStage : pipeline->getShaderStages())
     {
         if (shaderStage->module)
         {

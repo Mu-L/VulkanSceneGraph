@@ -12,19 +12,28 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
 </editor-fold> */
 
+#include <vsg/core/Object.h>
 #include <vsg/io/convert_utf.h>
 
+#include <map>
 #include <string>
 
 namespace vsg
 {
 
-    /// Class for managing paths/filename with full support for wide and single wide path strings.
+    enum FileType
+    {
+        FILE_NOT_FOUND = 0,
+        REGULAR_FILE,
+        DIRECTORY
+    };
+
+    /// Class for managing paths/filenames with full support for wide and single width path strings.
     /// Similar in role and features to std::filesystem::path, but is able to work on older compilers.
     class VSG_DECLSPEC Path
     {
     public:
-#if defined(_MSC_VER)
+#if defined(_MSC_VER) || defined(__MINGW32__)
         using value_type = wchar_t;
         static constexpr value_type windows_separator = L'\\';
         static constexpr value_type posix_separator = L'/';
@@ -114,8 +123,17 @@ namespace vsg
         inline const string_type& native() const noexcept { return _string; }
         inline operator const string_type&() const noexcept { return _string; }
         inline const value_type* c_str() const noexcept { return _string.c_str(); }
+#if defined(__MINGW32__)
+        inline operator const value_type*() const noexcept
+        {
+            return _string.c_str();
+        }
+#endif
 
-        reference operator[](size_type pos) { return _string[pos]; }
+        reference operator[](size_type pos)
+        {
+            return _string[pos];
+        }
         const_reference operator[](size_type pos) const { return _string[pos]; }
 
         void clear() noexcept { _string.clear(); }
@@ -168,9 +186,16 @@ namespace vsg
         Path& replace(size_type pos, size_type n, const char* str);
         Path& replace(size_type pos, size_type n, const wchar_t* str);
 
+        Path& erase(size_t pos = 0, size_t len = Path::npos);
+
+        FileType type() const;
+
+        Path lexically_normal() const;
+
     protected:
         string_type _string;
     };
+    VSG_type_name(vsg::Path);
 
     /// directly join two paths without a path separator
     inline Path operator+(const Path& lhs, const Path& rhs)
@@ -179,11 +204,33 @@ namespace vsg
         return path.concat(rhs);
     }
 
-    /// join two paths with a path separator between
+    /// join two paths with a path separator in between
     inline Path operator/(const Path& lhs, const Path& rhs)
     {
         Path path(lhs);
         return path /= rhs;
     }
+
+    using Paths = std::vector<Path>;
+    using PathObjects = std::map<Path, ref_ptr<Object>>;
+
+    /// return path stripped of the filename or final path component.
+    extern VSG_DECLSPEC Path filePath(const Path& path);
+
+    /// return file extension including the . prefix, i.e. vsg::fileExtension("file.vsgt") returns .vsgt
+    extern VSG_DECLSPEC Path fileExtension(const Path& path);
+
+    /// return lower case file extension including the . prefix, i.e. vsg::fileExtension("file.VSGT") returns .vsgt
+    /// By default prunes extras such as REST strings at the end of the extensions, uses ? as the deliminator for REST additions i.e. ".jpeg?g=42" becomes ".jpeg"
+    extern VSG_DECLSPEC Path lowerCaseFileExtension(const Path& path, bool pruneExtras = true);
+
+    /// return the filename stripped of any paths and extensions, i.e vsg::simpleFilename("path/file.vsgb") returns file
+    extern VSG_DECLSPEC Path simpleFilename(const Path& path);
+
+    /// return true if the path equals ., .. or has a trailing \.. \.., /.. or /....
+    extern VSG_DECLSPEC bool trailingRelativePath(const Path& path);
+
+    /// return the path minus the extension, i.e. vsg::removeExtension("path/file.png") returns path/file
+    extern VSG_DECLSPEC Path removeExtension(const Path& path);
 
 } // namespace vsg

@@ -10,7 +10,6 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
 </editor-fold> */
 
-#include <vsg/io/Options.h>
 #include <vsg/state/ResourceHints.h>
 
 using namespace vsg;
@@ -30,15 +29,37 @@ void ResourceHints::read(Input& input)
     input.read("maxSlot", maxSlot);
     input.read("numDescriptorSets", numDescriptorSets);
 
-    descriptorPoolSizes.resize(input.readValue<uint32_t>("NumDescriptorPoolSize")); // TODO need to fix capitalization?
+    if (input.version_greater_equal(0, 7, 3))
+        descriptorPoolSizes.resize(input.readValue<uint32_t>("descriptorPoolSizes"));
+    else
+        descriptorPoolSizes.resize(input.readValue<uint32_t>("NumDescriptorPoolSize"));
+
     for (auto& [type, count] : descriptorPoolSizes)
     {
         input.readValue<uint32_t>("type", type);
         input.read("count", count);
     }
 
-    input.readValue<uint64_t>("minimumBufferSize", minimumBufferSize);
-    input.readValue<uint64_t>("minimumDeviceMemorySize", minimumDeviceMemorySize);
+    input.read("minimumBufferSize", minimumBufferSize);
+    input.read("minimumDeviceMemorySize", minimumDeviceMemorySize);
+
+    if (input.version_greater_equal(1, 1, 8))
+    {
+        input.read("minimumStagingBufferSize", minimumStagingBufferSize);
+    }
+
+    if (input.version_greater_equal(1, 0, 10))
+    {
+        input.read("numLightsRange", numLightsRange);
+        input.read("numShadowMapsRange", numShadowMapsRange);
+        input.read("shadowMapSize", shadowMapSize);
+    }
+
+    if (input.version_greater_equal(1, 1, 8))
+    {
+        input.read("numDatabasePagerReadThreads", numDatabasePagerReadThreads);
+        input.readValue<uint32_t>("dataTransferHint", dataTransferHint);
+    }
 }
 
 void ResourceHints::write(Output& output) const
@@ -48,13 +69,35 @@ void ResourceHints::write(Output& output) const
     output.write("maxSlot", maxSlot);
     output.write("numDescriptorSets", numDescriptorSets);
 
-    output.writeValue<uint32_t>("NumDescriptorPoolSize", descriptorPoolSizes.size()); // TODO need to fix capitalization?
+    if (output.version_greater_equal(0, 7, 3))
+        output.writeValue<uint32_t>("descriptorPoolSizes", descriptorPoolSizes.size());
+    else
+        output.writeValue<uint32_t>("NumDescriptorPoolSize", descriptorPoolSizes.size());
+
     for (auto& [type, count] : descriptorPoolSizes)
     {
         output.writeValue<uint32_t>("type", type);
         output.write("count", count);
     }
 
-    output.writeValue<uint64_t>("minimumBufferSize", minimumBufferSize);
-    output.writeValue<uint64_t>("minimumDeviceMemorySize", minimumDeviceMemorySize);
+    output.write("minimumBufferSize", minimumBufferSize);
+    output.write("minimumDeviceMemorySize", minimumDeviceMemorySize);
+
+    if (output.version_greater_equal(1, 1, 8))
+    {
+        output.write("minimumStagingBufferSize", minimumStagingBufferSize);
+    }
+
+    if (output.version_greater_equal(1, 0, 10))
+    {
+        output.write("numLightsRange", numLightsRange);
+        output.write("numShadowMapsRange", numShadowMapsRange);
+        output.write("shadowMapSize", shadowMapSize);
+    }
+
+    if (output.version_greater_equal(1, 1, 8))
+    {
+        output.write("numDatabasePagerReadThreads", numDatabasePagerReadThreads);
+        output.writeValue<uint32_t>("dataTransferHint", dataTransferHint);
+    }
 }

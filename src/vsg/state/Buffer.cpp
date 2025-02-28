@@ -12,7 +12,6 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
 #include <vsg/core/Exception.h>
 #include <vsg/io/Logger.h>
-#include <vsg/io/Options.h>
 #include <vsg/state/Buffer.h>
 #include <vsg/vk/Context.h>
 
@@ -107,7 +106,7 @@ bool Buffer::compile(Device* device)
 
     if (VkResult result = vkCreateBuffer(*device, &bufferInfo, device->getAllocationCallbacks(), &vd.buffer); result != VK_SUCCESS)
     {
-        throw Exception{"Error: Failed to create vkBuffer.", result};
+        throw Exception{"Error: Failed to create VkBuffer.", result};
     }
 
     return true;

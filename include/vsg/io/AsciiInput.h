@@ -85,14 +85,21 @@ namespace vsg
         void read(size_t num, uint64_t* value) override { _read(num, value); }
         void read(size_t num, float* value) override { _read(num, value); }
         void read(size_t num, double* value) override { _read(num, value); }
+        void read(size_t num, long double* value) override { _read(num, value); }
 
         // read in an individual string
         void _read(std::string& value);
+
+        // read in an individual string
+        void _read(std::wstring& value);
 
         /// read one or more strings
         void read(size_t num, std::string* value) override;
 
         /// read one or more strings
+        void read(size_t num, std::wstring* value) override;
+
+        /// read one or more paths
         void read(size_t num, Path* value) override;
 
         /// read object

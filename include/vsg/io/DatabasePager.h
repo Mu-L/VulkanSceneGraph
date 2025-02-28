@@ -12,16 +12,14 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
 </editor-fold> */
 
+#include <vsg/app/CompileManager.h>
 #include <vsg/core/Inherit.h>
 #include <vsg/core/observer_ptr.h>
 #include <vsg/io/FileSystem.h>
 #include <vsg/io/Options.h>
-
 #include <vsg/nodes/PagedLOD.h>
-
-#include <vsg/threading/ActivityStatus.h>
-
-#include <vsg/viewer/CompileManager.h>
+#include <vsg/threading/DeleteQueue.h>
+#include <vsg/utils/Instrumentation.h>
 
 #include <condition_variable>
 #include <list>
@@ -63,22 +61,11 @@ namespace vsg
 
         void add(ref_ptr<PagedLOD> plod);
 
-        // add the plod reference to the queue then set the plod parameter to nullptr to ensure calling thread can't delete it
-        void add_then_reset(ref_ptr<PagedLOD>& plod);
-
-        void add(Nodes& nodes);
+        void add(ref_ptr<PagedLOD> plod, const CompileResult& cr);
 
         ref_ptr<PagedLOD> take_when_available();
 
-        Nodes take_all_when_available();
-
-        Nodes take_all()
-        {
-            std::scoped_lock lock(_mutex);
-            Nodes nodes;
-            nodes.swap(_queue);
-            return nodes;
-        }
+        Nodes take_all(CompileResult& result);
 
     protected:
         virtual ~DatabaseQueue();
@@ -86,12 +73,13 @@ namespace vsg
         std::mutex _mutex;
         std::condition_variable _cv;
         Nodes _queue;
+        CompileResult _compileResult;
         ref_ptr<ActivityStatus> _status;
     };
     VSG_type_name(vsg::DatabaseQueue);
 
     /// Multi-threaded database pager for reading, compiling loaded PagedLOD subgraphs and updating the scene graph
-    /// with newly loaded subgraphs and pruning expired PageLOD subgraphs
+    /// with newly loaded subgraphs and pruning expired PagedLOD subgraphs
     class VSG_DECLSPEC DatabasePager : public Inherit<Object, DatabasePager>
     {
     public:
@@ -100,13 +88,11 @@ namespace vsg
         DatabasePager(const DatabasePager&) = delete;
         DatabasePager& operator=(const DatabasePager& rhs) = delete;
 
-        virtual void start();
+        virtual void start(uint32_t numReadThreads = 4);
 
         virtual void request(ref_ptr<PagedLOD> plod);
 
-        virtual void updateSceneGraph(FrameStamp* frameStamp);
-
-        ref_ptr<const Options> options;
+        virtual void updateSceneGraph(ref_ptr<FrameStamp> frameStamp, CompileResult& cr);
 
         ref_ptr<CompileManager> compileManager;
 
@@ -115,12 +101,21 @@ namespace vsg
 
         ref_ptr<CulledPagedLODs> culledPagedLODs;
 
-        /// for systems for smaller GPU memory limits you may need to reduce the targetMaxNumPagedLODWithHighResSubgraphs to keep memory usage within available limits.
+        /// for systems with smaller GPU memory limits you may need to reduce the targetMaxNumPagedLODWithHighResSubgraphs to keep memory usage within available limits.
         uint32_t targetMaxNumPagedLODWithHighResSubgraphs = 1500;
 
         std::mutex pendingPagedLODMutex;
 
         ref_ptr<PagedLODContainer> pagedLODContainer;
+
+        /// Hook for assigning Instrumentation to enable profiling
+        ref_ptr<Instrumentation> instrumentation;
+
+        /// assign Instrumentation to all CompileTraversal and their associated Context
+        void assignInstrumentation(ref_ptr<Instrumentation> in_instrumentation);
+
+        /// read and delete threads created by start()
+        std::list<std::thread> threads;
 
     protected:
         virtual ~DatabasePager();
@@ -131,8 +126,7 @@ namespace vsg
 
         ref_ptr<DatabaseQueue> _requestQueue;
         ref_ptr<DatabaseQueue> _toMergeQueue;
-
-        std::list<std::thread> _readThreads;
+        ref_ptr<DeleteQueue> _deleteQueue;
     };
     VSG_type_name(vsg::DatabasePager);
 

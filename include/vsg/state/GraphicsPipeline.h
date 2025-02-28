@@ -25,12 +25,23 @@ namespace vsg
     /// Base class for setting up the various pipeline states with the VkGraphicsPipelineCreateInfo
     /// Subclasses are ColorBlendState, DepthStencilState, DynamicState, InputAssemblyState,
     /// MultisampleState, RasterizationState, TessellationState, VertexInputState and ViewportState.
-    class VSG_DECLSPEC GraphicsPipelineState : public Inherit<Object, GraphicsPipelineState>
+    class VSG_DECLSPEC GraphicsPipelineState : public Inherit<StateCommand, GraphicsPipelineState>
     {
     public:
         GraphicsPipelineState() {}
+        GraphicsPipelineState(const GraphicsPipelineState& gp) :
+            Inherit(), mask(gp.mask) {}
+
+        /// apply GraphicsPipelineState when (mask & view.mask) is non zero
+        Mask mask = MASK_ALL;
 
         virtual void apply(Context& context, VkGraphicsPipelineCreateInfo& pipelineInfo) const = 0;
+        void record(CommandBuffer&) const override {};
+
+    public:
+        int compare(const Object& rhs) const override;
+        void read(Input& input) override;
+        void write(Output& output) const override;
 
     protected:
         virtual ~GraphicsPipelineState() {}
@@ -38,6 +49,8 @@ namespace vsg
     VSG_type_name(vsg::GraphicsPipelineState);
 
     using GraphicsPipelineStates = std::vector<ref_ptr<GraphicsPipelineState>>;
+    extern VSG_DECLSPEC void mergeGraphicsPipelineStates(Mask mask, GraphicsPipelineStates& dest_PipelineStates, ref_ptr<GraphicsPipelineState> src_PipelineState);
+    extern VSG_DECLSPEC void mergeGraphicsPipelineStates(Mask mask, GraphicsPipelineStates& dest_PipelineStates, const GraphicsPipelineStates& src_PipelineStates);
 
     /// GraphicsPipeline encapsulates graphics VkPipeline and the VkGraphicsPipelineCreateInfo settings used to set it up.
     class VSG_DECLSPEC GraphicsPipeline : public Inherit<Object, GraphicsPipeline>
@@ -47,13 +60,16 @@ namespace vsg
 
         GraphicsPipeline(PipelineLayout* pipelineLayout, const ShaderStages& shaderStages, const GraphicsPipelineStates& pipelineStates, uint32_t subpass = 0);
 
-        VkPipeline vk(uint32_t deviceID) const { return _implementation[deviceID]->_pipeline; }
+        /// return the Vulkan Pipeline for specified viewID.
+        VkPipeline vk(uint32_t viewID) const { return _implementation[viewID]->_pipeline; }
+
+        /// variant of vk(viewID) method that is slower but adds validation of the viewID parameter
+        VkPipeline validated_vk(uint32_t viewID) const { return (viewID < _implementation.size()) ? (_implementation[viewID] ? _implementation[viewID]->_pipeline : 0) : 0; }
 
         /// VkGraphicsPipelineCreateInfo settings
         ShaderStages stages;
         GraphicsPipelineStates pipelineStates;
         ref_ptr<PipelineLayout> layout;
-        ref_ptr<RenderPass> renderPass;
         uint32_t subpass;
 
         int compare(const Object& rhs_object) const override;
@@ -65,7 +81,10 @@ namespace vsg
         void compile(Context& context);
 
         // remove the local reference to the Vulkan implementation
-        void release(uint32_t viewID) { _implementation[viewID] = {}; }
+        void release(uint32_t viewID)
+        {
+            if (viewID < static_cast<uint32_t>(_implementation.size())) _implementation[viewID] = {};
+        }
         void release() { _implementation.clear(); }
 
     protected:
@@ -77,9 +96,9 @@ namespace vsg
 
             virtual ~Implementation();
 
+            GraphicsPipelineStates _pipelineStates;
             VkPipeline _pipeline;
 
-            // TODO need to convert to use Implementation versions of RenderPass and PipelineLayout
             ref_ptr<Device> _device;
         };
 
@@ -91,7 +110,7 @@ namespace vsg
     class VSG_DECLSPEC BindGraphicsPipeline : public Inherit<StateCommand, BindGraphicsPipeline>
     {
     public:
-        BindGraphicsPipeline(GraphicsPipeline* in_pipeline = nullptr);
+        explicit BindGraphicsPipeline(ref_ptr<GraphicsPipeline> in_pipeline = {});
 
         /// pipeline to pass in the vkCmdBindPipeline call;
         ref_ptr<GraphicsPipeline> pipeline;

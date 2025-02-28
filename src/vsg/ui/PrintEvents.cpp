@@ -10,7 +10,6 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
 </editor-fold> */
 
-#include <vsg/io/Options.h>
 #include <vsg/io/stream.h>
 #include <vsg/ui/ApplicationEvent.h>
 #include <vsg/ui/KeyEvent.h>
@@ -53,7 +52,7 @@ void PrintEvents::apply(UIEvent& event)
 
 void PrintEvents::apply(FrameEvent& event)
 {
-    print(event) << " : franeCount = " << event.frameStamp->frameCount << std::endl;
+    print(event) << " : frameCount = " << event.frameStamp->frameCount << std::endl;
 }
 
 void PrintEvents::apply(ExposeWindowEvent& event)

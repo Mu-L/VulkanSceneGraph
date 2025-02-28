@@ -12,14 +12,14 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
 </editor-fold> */
 
+#include <vsg/app/Window.h>
 #include <vsg/core/observer_ptr.h>
 #include <vsg/ui/FrameStamp.h>
-#include <vsg/viewer/Window.h>
 
 namespace vsg
 {
 
-    /// TerminateEvent represents a application terminate event.
+    /// TerminateEvent represents an application termination event.
     class TerminateEvent : public Inherit<UIEvent, TerminateEvent>
     {
     public:

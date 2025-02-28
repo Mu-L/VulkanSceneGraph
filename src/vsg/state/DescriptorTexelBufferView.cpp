@@ -11,11 +11,21 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 </editor-fold> */
 
 #include <vsg/core/compare.h>
-#include <vsg/io/Options.h>
 #include <vsg/state/DescriptorTexelBufferView.h>
 #include <vsg/vk/Context.h>
 
 using namespace vsg;
+
+DescriptorTexelBufferView::DescriptorTexelBufferView() :
+    Inherit(0, 0, VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER)
+{
+}
+
+DescriptorTexelBufferView::DescriptorTexelBufferView(const DescriptorTexelBufferView& rhs, const CopyOp& copyop) :
+    Inherit(rhs, copyop),
+    texelBufferViews(copyop(rhs.texelBufferViews))
+{
+}
 
 DescriptorTexelBufferView::DescriptorTexelBufferView(uint32_t in_dstBinding, uint32_t in_dstArrayElement, VkDescriptorType in_descriptorType, const BufferViewList& in_texelBufferViews) :
     Inherit(in_dstBinding, in_dstArrayElement, in_descriptorType),
@@ -28,8 +38,21 @@ int DescriptorTexelBufferView::compare(const Object& rhs_object) const
     int result = Descriptor::compare(rhs_object);
     if (result != 0) return result;
 
-    auto& rhs = static_cast<decltype(*this)>(rhs_object);
+    const auto& rhs = static_cast<decltype(*this)>(rhs_object);
     return compare_pointer_container(texelBufferViews, rhs.texelBufferViews);
+}
+void DescriptorTexelBufferView::read(Input& input)
+{
+    Descriptor::read(input);
+
+    input.readObjects("texelBufferViews", texelBufferViews);
+}
+
+void DescriptorTexelBufferView::write(Output& output) const
+{
+    Descriptor::write(output);
+
+    output.writeObjects("texelBufferViews", texelBufferViews);
 }
 
 void DescriptorTexelBufferView::compile(Context& context)

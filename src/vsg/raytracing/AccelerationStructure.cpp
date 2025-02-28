@@ -12,13 +12,10 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
 #include <algorithm>
 
-#include <vsg/raytracing/AccelerationStructure.h>
-
 #include <vsg/core/Exception.h>
-#include <vsg/io/Options.h>
+#include <vsg/raytracing/AccelerationStructure.h>
 #include <vsg/vk/CommandBuffer.h>
 #include <vsg/vk/Context.h>
-#include <vsg/vk/Extensions.h>
 
 using namespace vsg;
 

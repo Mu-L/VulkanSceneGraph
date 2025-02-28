@@ -12,8 +12,8 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
 </editor-fold> */
 
+#include <vsg/vk/DeviceExtensions.h>
 #include <vsg/vk/DeviceFeatures.h>
-#include <vsg/vk/Extensions.h>
 #include <vsg/vk/Queue.h>
 
 #include <list>
@@ -23,6 +23,8 @@ namespace vsg
 
     // forward declare
     class WindowTraits;
+    class MemoryBufferPools;
+    class DescriptorPools;
 
     struct QueueSetting
     {
@@ -32,7 +34,7 @@ namespace vsg
 
     using QueueSettings = std::vector<QueueSetting>;
 
-    /// Device encapsulate vkDeivce, a logical handle to the PhysicalDevice with capabilities specified during construction.
+    /// Device encapsulates VkDevice, a logical handle to the PhysicalDevice with capabilities specified during construction.
     class VSG_DECLSPEC Device : public Inherit<Object, Device>
     {
     public:
@@ -53,20 +55,39 @@ namespace vsg
         AllocationCallbacks* getAllocationCallbacks() { return _allocator.get(); }
         const AllocationCallbacks* getAllocationCallbacks() const { return _allocator.get(); }
 
+        const Queues& getQueues() const { return _queues; }
+
         ref_ptr<Queue> getQueue(uint32_t queueFamilyIndex, uint32_t queueIndex = 0);
 
-        const Extensions* getExtensions() const { return _extensions.get(); }
+        /// get the extensions structure that holds a range of function pointers to vkInstance extensions
+        const DeviceExtensions* getExtensions() const { return _extensions.get(); }
 
         /// get the address of specified function using vkGetDeviceProcAddr
+        /// for core commands beyond the apiVersion specified in vsg::Instance creation, vkGetDeviceProcAddr may return a non-nullptr function pointer, though the function pointer must not be called.
+        /// for extension commands, vkGetDeviceProcAddr will always return nullptr if the extension is not enabled in vsg::Device creation.
         template<typename T>
-        bool getProcAddr(T& procAdddress, const char* pName, const char* pNameFallback = nullptr) const
+        bool getProcAddr(T& procAddress, const char* pName, const char* pNameFallback = nullptr) const
         {
-            procAdddress = reinterpret_cast<T>(vkGetDeviceProcAddr(_device, pName));
-            if (procAdddress) return true;
+            procAddress = reinterpret_cast<T>(vkGetDeviceProcAddr(_device, pName));
+            if (procAddress) return true;
 
-            if (pNameFallback) procAdddress = reinterpret_cast<T>(vkGetDeviceProcAddr(_device, pNameFallback));
-            return (procAdddress);
+            if (pNameFallback) procAddress = reinterpret_cast<T>(vkGetDeviceProcAddr(_device, pNameFallback));
+            return (procAddress);
         }
+
+        /// device-level core functionality can be used if both VkInstance and VkPhysicalDevice support the Vulkan version that provides it.
+        bool supportsApiVersion(uint32_t version) const;
+
+        /// list of enabled extensions when the Device was created
+        const Names enabledExtensions;
+
+        /// return true if Device was created with specified extension
+        bool supportsDeviceExtension(const char* extensionName) const;
+
+        // provide observer_ptr to memory buffer and descriptor pools so that these can be accessed when required
+        observer_ptr<MemoryBufferPools> deviceMemoryBufferPools;
+        observer_ptr<MemoryBufferPools> stagingMemoryBufferPools;
+        observer_ptr<DescriptorPools> descriptorPools;
 
     protected:
         virtual ~Device();
@@ -76,9 +97,9 @@ namespace vsg
         ref_ptr<Instance> _instance;
         ref_ptr<PhysicalDevice> _physicalDevice;
         ref_ptr<AllocationCallbacks> _allocator;
-        ref_ptr<Extensions> _extensions;
+        ref_ptr<DeviceExtensions> _extensions;
 
-        std::list<ref_ptr<Queue>> _queues;
+        Queues _queues;
     };
     VSG_type_name(vsg::Device);
 

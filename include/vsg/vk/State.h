@@ -58,6 +58,7 @@ namespace vsg
             stack.pop();
             dirty = !stack.empty();
         }
+        bool empty() const { return stack.empty(); }
         size_t size() const { return stack.size(); }
         const T* top() const { return stack.top(); }
 
@@ -71,15 +72,15 @@ namespace vsg
         }
     };
 
-    /// MatrixStack used internally by vsg::State to manage stack of project or modelview matrices
+    /// MatrixStack used internally by vsg::State to manage stack of projection or modelview matrices
     class MatrixStack
     {
     public:
-        MatrixStack(uint32_t in_offset = 0) :
+        explicit MatrixStack(uint32_t in_offset = 0) :
             offset(in_offset)
         {
             // make sure there is an initial matrix
-            matrixStack.emplace(mat4());
+            matrixStack.emplace(dmat4());
             dirty = true;
         }
 
@@ -223,18 +224,18 @@ namespace vsg
         }
     };
 
-    /// vsg::State used by vsg::RecordTraversal to manage state stacks, projection, modelview matrix and frustum stacks.
+    /// vsg::State is used by vsg::RecordTraversal to manage state stacks, projection and modelview matrices and frustum stacks.
     class State : public Inherit<Object, State>
     {
     public:
-        explicit State(CommandBuffer* commandBuffer, uint32_t maxSlot) :
-            _commandBuffer(commandBuffer),
+        explicit State(uint32_t maxSlot) :
             dirty(false),
-            stateStacks(maxSlot + 1)
+            stateStacks(static_cast<size_t>(maxSlot) + 1)
         {
         }
 
-        using StateStacks = std::vector<StateStack<StateCommand>>;
+        using StateCommandStack = StateStack<StateCommand>;
+        using StateStacks = std::vector<StateCommandStack>;
 
         ref_ptr<CommandBuffer> _commandBuffer;
 
@@ -244,12 +245,29 @@ namespace vsg
         using FrustumStack = std::stack<Frustum>;
         FrustumStack _frustumStack;
 
-        bool dirty;
+        bool dirty = true;
+
+        bool inheritViewForLODScaling = false;
+        dmat4 inheritedProjectionMatrix;
+        dmat4 inheritedViewMatrix;
+        dmat4 inheritedViewTransform;
 
         StateStacks stateStacks;
 
         MatrixStack projectionMatrixStack{0};
         MatrixStack modelviewMatrixStack{64};
+
+        void reserve(uint32_t maxSlot)
+        {
+            size_t required_size = static_cast<size_t>(maxSlot) + 1;
+            if (required_size > stateStacks.size()) stateStacks.resize(required_size);
+        }
+
+        void setInhertiedViewProjectionAndViewMatrix(const dmat4& projMatrix, const dmat4& viewMatrix)
+        {
+            inheritedProjectionMatrix = projMatrix;
+            inheritedViewMatrix = viewMatrix;
+        }
 
         void setProjectionAndViewMatrix(const dmat4& projMatrix, const dmat4& viewMatrix)
         {
@@ -263,6 +281,11 @@ namespace vsg
 
             // clear frustum stack
             while (!_frustumStack.empty()) _frustumStack.pop();
+
+            if (inheritViewForLODScaling)
+            {
+                inheritedViewTransform = inheritedViewMatrix * inverse(viewMatrix);
+            }
 
             // push frustum in world coords
             pushFrustum();
@@ -284,10 +307,56 @@ namespace vsg
             }
         }
 
+        template<typename Iterator>
+        inline void push(Iterator begin, Iterator end)
+        {
+            for (auto itr = begin; itr != end; ++itr)
+            {
+                stateStacks[(*itr)->slot].push((*itr));
+            }
+            dirty = true;
+        }
+
+        inline void push(const StateCommands& commands)
+        {
+            push(commands.begin(), commands.end());
+        }
+
+
+        template<typename Iterator>
+        inline void pop(Iterator begin, Iterator end)
+        {
+            for (auto itr = begin; itr != end; ++itr)
+            {
+                stateStacks[(*itr)->slot].pop();
+            }
+            dirty = true;
+        }
+
+        inline void pop(const StateCommands& commands)
+        {
+            pop(commands.begin(), commands.end());
+        }
+
+        inline void push(ref_ptr<StateCommand> command)
+        {
+            stateStacks[command->slot].push(command);
+            dirty = true;
+        }
+
+        inline void pop(ref_ptr<StateCommand> command)
+        {
+            stateStacks[command->slot].pop();
+            dirty = true;
+        }
+
         inline void pushFrustum()
         {
             _frustumStack.push(Frustum(_frustumProjected, modelviewMatrixStack.top()));
-            _frustumStack.top().computeLodScale(projectionMatrixStack.top(), modelviewMatrixStack.top());
+            if (inheritViewForLODScaling)
+                _frustumStack.top().computeLodScale(inheritedProjectionMatrix, inheritedViewTransform * modelviewMatrixStack.top());
+            else
+                _frustumStack.top().computeLodScale(projectionMatrixStack.top(), modelviewMatrixStack.top());
         }
 
         inline void applyFrustum()

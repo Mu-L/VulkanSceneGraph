@@ -10,13 +10,18 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
 </editor-fold> */
 
-#include <vsg/io/Options.h>
 #include <vsg/io/stream.h>
 #include <vsg/nodes/CullGroup.h>
 
 using namespace vsg;
 
 CullGroup::CullGroup()
+{
+}
+
+CullGroup::CullGroup(const CullGroup& rhs, const CopyOp& copyop) :
+    Inherit(rhs, copyop),
+    bound(rhs.bound)
 {
 }
 
@@ -27,6 +32,15 @@ CullGroup::CullGroup(const dsphere& in_bound) :
 
 CullGroup::~CullGroup()
 {
+}
+
+int CullGroup::compare(const Object& rhs_object) const
+{
+    int result = Group::compare(rhs_object);
+    if (result != 0) return result;
+
+    const auto& rhs = static_cast<decltype(*this)>(rhs_object);
+    return compare_value(bound, rhs.bound);
 }
 
 void CullGroup::read(Input& input)

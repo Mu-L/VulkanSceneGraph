@@ -16,14 +16,19 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 #include <vsg/commands/DrawIndexed.h>
 #include <vsg/io/Logger.h>
 #include <vsg/maths/transform.h>
+#include <vsg/nodes/CullGroup.h>
 #include <vsg/nodes/CullNode.h>
+#include <vsg/nodes/DepthSorted.h>
 #include <vsg/nodes/Geometry.h>
 #include <vsg/nodes/LOD.h>
 #include <vsg/nodes/PagedLOD.h>
 #include <vsg/nodes/StateGroup.h>
 #include <vsg/nodes/Transform.h>
+#include <vsg/nodes/VertexDraw.h>
 #include <vsg/nodes/VertexIndexDraw.h>
 #include <vsg/state/GraphicsPipeline.h>
+#include <vsg/text/CpuLayoutTechnique.h>
+#include <vsg/text/GpuLayoutTechnique.h>
 #include <vsg/utils/Intersector.h>
 
 using namespace vsg;
@@ -37,10 +42,10 @@ struct PushPopNode
     ~PushPopNode() { nodePath.pop_back(); }
 };
 
-Intersector::Intersector(ref_ptr<ArrayState> intialArrayState)
+Intersector::Intersector(ref_ptr<ArrayState> initialArrayState)
 {
     arrayStateStack.reserve(4);
-    arrayStateStack.emplace_back(intialArrayState ? intialArrayState : ArrayState::create());
+    arrayStateStack.emplace_back(initialArrayState ? initialArrayState : ArrayState::create());
 }
 
 void Intersector::apply(const Node& node)
@@ -54,7 +59,7 @@ void Intersector::apply(const StateGroup& stategroup)
 {
     PushPopNode ppn(_nodePath, &stategroup);
 
-    auto arrayState = stategroup.prototypeArrayState ? stategroup.prototypeArrayState->clone(arrayStateStack.back()) : arrayStateStack.back()->clone();
+    auto arrayState = stategroup.prototypeArrayState ? stategroup.prototypeArrayState->cloneArrayState(arrayStateStack.back()) : arrayStateStack.back()->cloneArrayState();
 
     for (auto& statecommand : stategroup.stateCommands)
     {
@@ -120,6 +125,31 @@ void Intersector::apply(const CullNode& cn)
     if (intersects(cn.bound)) cn.traverse(*this);
 }
 
+void Intersector::apply(const CullGroup& cn)
+{
+    PushPopNode ppn(_nodePath, &cn);
+
+    if (intersects(cn.bound)) cn.traverse(*this);
+}
+
+void Intersector::apply(const DepthSorted& cn)
+{
+    PushPopNode ppn(_nodePath, &cn);
+
+    if (intersects(cn.bound)) cn.traverse(*this);
+}
+
+void Intersector::apply(const VertexDraw& vid)
+{
+    auto& arrayState = *arrayStateStack.back();
+    arrayState.apply(vid);
+    if (!arrayState.vertices) return;
+
+    PushPopNode ppn(_nodePath, &vid);
+
+    intersectDraw(vid.firstVertex, vid.vertexCount, vid.firstInstance, vid.instanceCount);
+}
+
 void Intersector::apply(const VertexIndexDraw& vid)
 {
     auto& arrayState = *arrayStateStack.back();
@@ -130,38 +160,7 @@ void Intersector::apply(const VertexIndexDraw& vid)
 
     PushPopNode ppn(_nodePath, &vid);
 
-#if 0
-    dsphere bound;
-    if (!vid.getValue("bound", bound))
-    {
-        // TODO ignores instancing
-        box bb;
-        for (auto& vertex : *arrayState.vertices) bb.add(vertex);
-
-        if (bb.valid())
-        {
-            bound.center = (bb.min + bb.max) * 0.5f;
-            bound.radius = length(bb.max - bb.min) * 0.5f;
-
-            // hacky but better to reuse results.  Perhaps use a std::map<> to avoid a breaking const, or make the visitor non const?
-            const_cast<VertexIndexDraw&>(vid).setValue("bound", bound);
-        }
-
-        //debug("Computed bounding sphere : ", bound.center, ", ", bound.radius);
-    }
-    else
-    {
-        //debug("Found bounding sphere : ", bound.center, ", ", bound.radius);
-    }
-
-    if (intersects(bound))
-    {
-
-        intersectDrawIndexed(vid.firstIndex, vid.indexCount, vid.firstInstance, vid.instanceCount);
-    }
-#else
     intersectDrawIndexed(vid.firstIndex, vid.indexCount, vid.firstInstance, vid.instanceCount);
-#endif
 }
 
 void Intersector::apply(const Geometry& geometry)
@@ -205,6 +204,14 @@ void Intersector::apply(const uintArray& array)
 {
     ushort_indices = nullptr;
     uint_indices = &array;
+}
+
+void Intersector::apply(const TextTechnique& technique)
+{
+    if (auto cpuTechnique = technique.cast<CpuLayoutTechnique>())
+        cpuTechnique->scenegraph->accept(*this);
+    if (auto gpuTechnique = technique.cast<GpuLayoutTechnique>())
+        gpuTechnique->scenegraph->accept(*this);
 }
 
 void Intersector::apply(const Draw& draw)

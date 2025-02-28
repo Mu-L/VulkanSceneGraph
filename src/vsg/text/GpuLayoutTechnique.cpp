@@ -28,11 +28,109 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 #include <vsg/text/GpuLayoutTechnique.h>
 #include <vsg/text/StandardLayout.h>
 #include <vsg/text/Text.h>
-#include <vsg/utils/GraphicsPipelineConfig.h>
+#include <vsg/utils/GraphicsPipelineConfigurator.h>
 #include <vsg/utils/ShaderSet.h>
 #include <vsg/utils/SharedObjects.h>
 
 using namespace vsg;
+
+class VSG_DECLSPEC GpuLayoutTechniqueArrayState : public Inherit<ArrayState, GpuLayoutTechniqueArrayState>
+{
+public:
+    GpuLayoutTechniqueArrayState(const GpuLayoutTechnique* in_technique, const Text* in_text, bool in_billboard) :
+        technique(in_technique),
+        text(in_text),
+        billboard(in_billboard)
+    {
+    }
+
+    GpuLayoutTechniqueArrayState(const GpuLayoutTechniqueArrayState& rhs) :
+        Inherit(rhs),
+        technique(rhs.technique),
+        text(rhs.text),
+        billboard(rhs.billboard)
+    {
+    }
+
+    explicit GpuLayoutTechniqueArrayState(const ArrayState& rhs) :
+        Inherit(rhs)
+    {
+    }
+
+    ref_ptr<ArrayState> cloneArrayState() override
+    {
+        return GpuLayoutTechniqueArrayState::create(*this);
+    }
+
+    ref_ptr<ArrayState> cloneArrayState(ref_ptr<ArrayState> arrayState) override
+    {
+        auto clone = GpuLayoutTechniqueArrayState::create(*arrayState);
+        clone->technique = technique;
+        clone->text = text;
+        clone->billboard = billboard;
+        return clone;
+    }
+
+    ref_ptr<const vec3Array> vertexArray(uint32_t instanceIndex) override
+    {
+        // compute the position of the glyph
+        float horiAdvance = 0.0;
+        float vertAdvance = 0.0;
+        for (uint32_t i = 0; i < instanceIndex; ++i)
+        {
+            uint32_t glyph_index = technique->textArray->at(i);
+            if (glyph_index == 0)
+            {
+                // treat as a newlline
+                vertAdvance -= 1.0;
+                horiAdvance = 0.0;
+            }
+            else
+            {
+                const GlyphMetrics& glyph_metrics = text->font->glyphMetrics->at(glyph_index);
+                horiAdvance += glyph_metrics.horiAdvance;
+            }
+        }
+
+        uint32_t glyph_index = technique->textArray->at(instanceIndex);
+        const GlyphMetrics& glyph_metrics = text->font->glyphMetrics->at(glyph_index);
+
+        // billboard effect
+        auto textLayout = technique->layoutValue->value();
+        dmat4 transform_to_local;
+        if (billboard && !localToWorldStack.empty() && !worldToLocalStack.empty())
+        {
+            const dmat4& mv = localToWorldStack.back();
+            const dmat4& inverse_mv = worldToLocalStack.back();
+            dvec3 center_eye = mv * dvec3(textLayout.position);
+            dmat4 billboard_mv = computeBillboardMatrix(center_eye, (double)textLayout.billboardAutoScaleDistance);
+            transform_to_local = inverse_mv * billboard_mv;
+        }
+        else
+        {
+            transform_to_local = vsg::translate(textLayout.position);
+        }
+
+        auto new_vertices = vsg::vec3Array::create(6);
+        auto src_vertex_itr = vertices->begin();
+        for (auto& v : *new_vertices)
+        {
+            const auto& sv = *(src_vertex_itr++);
+
+            // compute the position of vertex
+            vec3 pos = textLayout.horizontal * (horiAdvance + textLayout.horizontalAlignment + glyph_metrics.horiBearingX + sv.x * glyph_metrics.width) +
+                       textLayout.vertical * (vertAdvance + textLayout.verticalAlignment + glyph_metrics.horiBearingY + (sv.y - 1.f) * glyph_metrics.height);
+
+            v = vec3(transform_to_local * dvec3(pos));
+        }
+
+        return new_vertices;
+    }
+
+    const GpuLayoutTechnique* technique = nullptr;
+    const Text* text = nullptr;
+    bool billboard = false;
+};
 
 template<typename T>
 void assignValue(T& dest, const T& src, bool& updated)
@@ -44,8 +142,9 @@ void assignValue(T& dest, const T& src, bool& updated)
 
 void GpuLayoutTechnique::setup(Text* text, uint32_t minimumAllocation, ref_ptr<const Options> options)
 {
-    auto layout = text->layout;
-    if (!layout) return;
+    if (!text || !(text->text) || !text->font || !text->layout) return;
+
+    auto& layout = text->layout;
 
     textExtents = layout->extents(text->text, *(text->font));
 
@@ -74,11 +173,13 @@ void GpuLayoutTechnique::setup(Text* text, uint32_t minimumAllocation, ref_ptr<c
             if (textArray && requiredSize < static_cast<uint32_t>(textArray->valueCount()))
             {
                 allocatedSize = static_cast<uint32_t>(textArray->valueCount());
+                textArray->dirty();
                 return;
             }
 
             allocatedSize = std::max(requiredSize, minimumSize);
             textArray = uintArray::create(allocatedSize, 0u);
+            textArray->properties.dataVariance = DYNAMIC_DATA;
 
             updated = true;
         }
@@ -90,7 +191,17 @@ void GpuLayoutTechnique::setup(Text* text, uint32_t minimumAllocation, ref_ptr<c
             auto itr = textArray->begin();
             for (auto& c : text.value())
             {
-                assignValue(*(itr++), font.glyphIndexForCharcode(uint8_t(c)), updated);
+                assignValue(*(itr++), font.glyphIndexForCharcode(uint32_t(c)), updated);
+            }
+        }
+        void apply(const wstringValue& text) override
+        {
+            allocate(static_cast<uint32_t>(text.value().size()));
+
+            auto itr = textArray->begin();
+            for (auto& c : text.value())
+            {
+                assignValue(*(itr++), font.glyphIndexForCharcode(uint32_t(c)), updated);
             }
         }
         void apply(const ubyteArray& text) override
@@ -98,7 +209,7 @@ void GpuLayoutTechnique::setup(Text* text, uint32_t minimumAllocation, ref_ptr<c
             allocate(static_cast<uint32_t>(text.valueCount()));
 
             auto itr = textArray->begin();
-            for (auto& c : text)
+            for (const auto& c : text)
             {
                 assignValue(*(itr++), font.glyphIndexForCharcode(c), updated);
             }
@@ -108,7 +219,7 @@ void GpuLayoutTechnique::setup(Text* text, uint32_t minimumAllocation, ref_ptr<c
             allocate(static_cast<uint32_t>(text.valueCount()));
 
             auto itr = textArray->begin();
-            for (auto& c : text)
+            for (const auto& c : text)
             {
                 assignValue(*(itr++), font.glyphIndexForCharcode(c), updated);
             }
@@ -118,25 +229,26 @@ void GpuLayoutTechnique::setup(Text* text, uint32_t minimumAllocation, ref_ptr<c
             allocate(static_cast<uint32_t>(text.valueCount()));
 
             auto itr = textArray->begin();
-            for (auto& c : text)
+            for (const auto& c : text)
             {
                 assignValue(*(itr++), font.glyphIndexForCharcode(c), updated);
             }
         }
     };
 
-    ConvertString convert(*(text->font), textArray, textArrayUpdated, minimumAllocation);
-    text->text->accept(convert);
+    ConvertString converter(*(text->font), textArray, textArrayUpdated, minimumAllocation);
+    text->text->accept(converter);
 
-    if (convert.allocatedSize == 0) return;
+    if (converter.allocatedSize == 0) return;
 
-    uint32_t num_quads = convert.size;
-
-    // TODO need to reallocate DescriptorBuffer if textArray changes size?
-    if (!textDescriptor) textDescriptor = DescriptorBuffer::create(textArray, 1, 0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
+    uint32_t num_quads = converter.size;
 
     // set up the layout data in a form digestible by the GPU.
-    if (!layoutValue) layoutValue = TextLayoutValue::create();
+    if (!layoutValue)
+    {
+        layoutValue = TextLayoutValue::create();
+        layoutValue->properties.dataVariance = DYNAMIC_DATA;
+    }
 
     bool billboard = false;
     auto& layoutStruct = layoutValue->value();
@@ -151,6 +263,8 @@ void GpuLayoutTechnique::setup(Text* text, uint32_t minimumAllocation, ref_ptr<c
 
         billboard = standardLayout->billboard;
         assignValue(layoutStruct.billboardAutoScaleDistance, standardLayout->billboardAutoScaleDistance, textLayoutUpdated);
+
+        layoutValue->dirty();
     }
 
     // assign alignment offset
@@ -158,28 +272,29 @@ void GpuLayoutTechnique::setup(Text* text, uint32_t minimumAllocation, ref_ptr<c
     assignValue(layoutStruct.horizontalAlignment, alignment.x, textLayoutUpdated);
     assignValue(layoutStruct.verticalAlignment, alignment.y, textLayoutUpdated);
 
-    if (!layoutDescriptor) layoutDescriptor = DescriptorBuffer::create(layoutValue, 0, 0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
-
     if (!vertices)
     {
-        vertices = vec3Array::create(4);
+        vertices = vec3Array::create(6);
 
         float leadingEdgeGradient = 0.1f;
 
         vertices->set(0, vec3(0.0f, 1.0f, 2.0f * leadingEdgeGradient));
         vertices->set(1, vec3(0.0f, 0.0f, leadingEdgeGradient));
         vertices->set(2, vec3(1.0f, 1.0f, leadingEdgeGradient));
-        vertices->set(3, vec3(1.0f, 0.0f, 0.0f));
+
+        vertices->set(3, vec3(0.0f, 0.0f, leadingEdgeGradient));
+        vertices->set(4, vec3(1.0f, 0.0f, 0.0f));
+        vertices->set(5, vec3(1.0f, 1.0f, leadingEdgeGradient));
     }
 
     if (!draw)
-        draw = Draw::create(4, num_quads, 0, 0);
+        draw = Draw::create(6, num_quads, 0, 0);
     else
         draw->instanceCount = num_quads;
 
     ref_ptr<StateGroup> stateGroup = scenegraph.cast<StateGroup>();
 
-    // create StateGroup as the root of the scene/command graph to hold the GraphicsProgram, and binding of Descriptors to decorate the whole graph
+    // create StateGroup as the root of the scene/command graph to hold the GraphicsPipeline, and binding of Descriptors to decorate the whole graph
     if (!stateGroup)
     {
         stateGroup = StateGroup::create();
@@ -187,7 +302,7 @@ void GpuLayoutTechnique::setup(Text* text, uint32_t minimumAllocation, ref_ptr<c
 
         auto shaderSet = text->shaderSet ? text->shaderSet : createTextShaderSet(options);
 
-        auto config = vsg::GraphicsPipelineConfig::create(shaderSet);
+        auto config = vsg::GraphicsPipelineConfigurator::create(shaderSet);
 
         auto& sharedObjects = text->font->sharedObjects;
         if (!sharedObjects) sharedObjects = SharedObjects::create();
@@ -199,96 +314,22 @@ void GpuLayoutTechnique::setup(Text* text, uint32_t minimumAllocation, ref_ptr<c
         {
             config->shaderHints->defines.insert("BILLBOARD");
         }
+        if (!text->font->atlasImageInfo)
+        {
+            text->font->createFontImages();
+        }
+        config->assignTexture("textureAtlas", {text->font->atlasImageInfo}, 0);
+        config->assignTexture("glyphMetrics", {text->font->glyphImageInfo}, 0);
 
-        // set up sampler for atlas.
-        auto sampler = Sampler::create();
-        sampler->magFilter = VK_FILTER_LINEAR;
-        sampler->minFilter = VK_FILTER_LINEAR;
-        sampler->mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
-        sampler->addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER;
-        sampler->addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER;
-        sampler->addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER;
-        sampler->borderColor = VK_BORDER_COLOR_INT_TRANSPARENT_BLACK;
-        sampler->anisotropyEnable = VK_TRUE;
-        sampler->maxAnisotropy = 16.0f;
-        sampler->maxLod = 12.0;
-
-        if (sharedObjects) sharedObjects->share(sampler);
-
-        auto glyphMetricSampler = Sampler::create();
-        glyphMetricSampler->magFilter = VK_FILTER_NEAREST;
-        glyphMetricSampler->minFilter = VK_FILTER_NEAREST;
-        glyphMetricSampler->mipmapMode = VK_SAMPLER_MIPMAP_MODE_NEAREST;
-        glyphMetricSampler->addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
-        glyphMetricSampler->addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
-        glyphMetricSampler->addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
-        glyphMetricSampler->unnormalizedCoordinates = VK_TRUE;
-
-        if (sharedObjects) sharedObjects->share(glyphMetricSampler);
-
-        uint32_t stride = sizeof(vec4);
-        uint32_t numVec4PerGlyph = static_cast<uint32_t>(sizeof(GlyphMetrics) / sizeof(vec4));
-        uint32_t numGlyphs = static_cast<uint32_t>(text->font->glyphMetrics->valueCount());
-
-        auto glyphMetricsProxy = vec4Array2D::create(text->font->glyphMetrics, 0, stride, numVec4PerGlyph, numGlyphs, Data::Properties{VK_FORMAT_R32G32B32A32_SFLOAT});
-
-        Descriptors descriptors;
-        config->assignTexture(descriptors, "textureAtlas", text->font->atlas, sampler);
-        config->assignTexture(descriptors, "glyphMetrics", glyphMetricsProxy, glyphMetricSampler);
-
-        if (sharedObjects) sharedObjects->share(descriptors);
-
-        // disable face culling so text can be seen from both sides
-        config->rasterizationState->cullMode = VK_CULL_MODE_NONE;
-
-        // set topology of primitive
-        config->inputAssemblyState->topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP;
-
-        // set alpha blending
-        VkPipelineColorBlendAttachmentState colorBlendAttachment = {};
-        colorBlendAttachment.blendEnable = VK_TRUE;
-        colorBlendAttachment.colorWriteMask = VK_COLOR_COMPONENT_R_BIT |
-                                              VK_COLOR_COMPONENT_G_BIT |
-                                              VK_COLOR_COMPONENT_B_BIT |
-                                              VK_COLOR_COMPONENT_A_BIT;
-
-        colorBlendAttachment.srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA;
-        colorBlendAttachment.dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
-        colorBlendAttachment.colorBlendOp = VK_BLEND_OP_ADD;
-        colorBlendAttachment.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
-        colorBlendAttachment.dstAlphaBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
-        colorBlendAttachment.alphaBlendOp = VK_BLEND_OP_ADD;
-
-        config->colorBlendState->attachments = {colorBlendAttachment};
-
-        // set up descriptor set for text uniforms and layout
-        DescriptorSetLayoutBindings textArrayDescriptorBindings{
-            {0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1, VK_SHADER_STAGE_VERTEX_BIT, nullptr}, // Layout uniform
-            {1, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1, VK_SHADER_STAGE_VERTEX_BIT, nullptr}  // Text uniform
-        };
-
-        auto textArrayDescriptorSetLayout = DescriptorSetLayout::create(textArrayDescriptorBindings);
-        if (sharedObjects) sharedObjects->share(textArrayDescriptorSetLayout);
-
-        config->additionalDescriptorSetLayout = textArrayDescriptorSetLayout;
+        config->assignDescriptor("textLayout", layoutValue);
+        config->assignDescriptor("text", textArray);
 
         if (sharedObjects)
             sharedObjects->share(config, [](auto gpc) { gpc->init(); });
         else
             config->init();
 
-        stateGroup->add(config->bindGraphicsPipeline);
-
-        auto descriptorSetLayout = config->descriptorSetLayout;
-        if (sharedObjects) sharedObjects->share(descriptorSetLayout);
-        auto descriptorSet = vsg::DescriptorSet::create(descriptorSetLayout, descriptors);
-        auto bindDescriptorSet = vsg::BindDescriptorSet::create(VK_PIPELINE_BIND_POINT_GRAPHICS, config->layout, 0, descriptorSet);
-        if (sharedObjects) sharedObjects->share(bindDescriptorSet);
-        stateGroup->add(bindDescriptorSet);
-
-        auto textDescriptorSet = DescriptorSet::create(textArrayDescriptorSetLayout, Descriptors{layoutDescriptor, textDescriptor});
-        bindTextDescriptorSet = vsg::BindDescriptorSet::create(VK_PIPELINE_BIND_POINT_GRAPHICS, config->layout, 1, textDescriptorSet);
-        stateGroup->add(bindTextDescriptorSet);
+        config->copyTo(stateGroup, sharedObjects);
 
         bindVertexBuffers = BindVertexBuffers::create(0, arrays);
 
@@ -297,17 +338,12 @@ void GpuLayoutTechnique::setup(Text* text, uint32_t minimumAllocation, ref_ptr<c
         drawCommands->addChild(bindVertexBuffers);
         drawCommands->addChild(draw);
         stateGroup->addChild(drawCommands);
+
+        // Assign ArrayState for CPU mapping of vertices
+        stateGroup->prototypeArrayState = GpuLayoutTechniqueArrayState::create(this, text, billboard);
     }
     else
     {
-        if (textArrayUpdated)
-        {
-            textDescriptor->copyDataListToBuffers();
-        }
-        if (textLayoutUpdated)
-        {
-            layoutDescriptor->copyDataListToBuffers();
-        }
     }
 }
 void GpuLayoutTechnique::setup(TextGroup* textGroup, uint32_t minimumAllocation, ref_ptr<const Options> options)

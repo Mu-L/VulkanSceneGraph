@@ -12,6 +12,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
 </editor-fold> */
 
+#include <vsg/core/Exception.h>
 #include <vsg/core/ref_ptr.h>
 #include <vsg/core/type_name.h>
 #include <vsg/io/Path.h>
@@ -20,9 +21,11 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 #include <vsg/maths/mat4.h>
 #include <vsg/maths/plane.h>
 #include <vsg/maths/quat.h>
+#include <vsg/maths/sphere.h>
 #include <vsg/maths/vec2.h>
 #include <vsg/maths/vec3.h>
 #include <vsg/maths/vec4.h>
+#include <vsg/utils/CoordinateSpace.h>
 
 #include <istream>
 #include <ostream>
@@ -30,6 +33,32 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
 namespace vsg
 {
+
+    /// helper class for inserting indentation into streams useful for formatting output.
+    struct indentation
+    {
+        int indent = 0;
+
+        indentation& operator+=(int delta)
+        {
+            indent += delta;
+            return *this;
+        }
+        indentation& operator-=(int delta)
+        {
+            indent -= delta;
+            return *this;
+        }
+    };
+
+    inline indentation operator+(const indentation& lhs, const int rhs) { return indentation{lhs.indent + rhs}; }
+    inline indentation operator-(const indentation& lhs, const int rhs) { return indentation{lhs.indent - rhs}; }
+
+    inline std::ostream& operator<<(std::ostream& output, const indentation& in)
+    {
+        for (int i = 0; i < in.indent; ++i) output.put(' ');
+        return output;
+    }
 
     /// convenience function for writing/streaming values to a std::string
     template<typename... Args>
@@ -164,6 +193,22 @@ namespace vsg
         return input;
     }
 
+    /// output stream support for vsg::t_sphere
+    template<typename T>
+    std::ostream& operator<<(std::ostream& output, const vsg::t_sphere<T>& sp)
+    {
+        output << sp.vec;
+        return output;
+    }
+
+    /// input stream support for vsg::t_sphere
+    template<typename T>
+    std::istream& operator>>(std::istream& input, vsg::t_sphere<T>& sp)
+    {
+        input >> sp.vec;
+        return input;
+    }
+
     /// output stream support for vsg::t_box
     template<typename T>
     std::ostream& operator<<(std::ostream& output, const vsg::t_box<T>& bx)
@@ -232,4 +277,39 @@ namespace vsg
         path = str;
         return input;
     }
+
+    /// output stream support for vsg::Exception
+    inline std::ostream& operator<<(std::ostream& output, const vsg::Exception& e)
+    {
+        output << "Error code: " << e.result << " | " << e.message;
+        return output;
+    }
+
+    inline std::istream& operator>>(std::istream& input, CoordinateSpace& coordinateSpace)
+    {
+        std::string str;
+        input >> str;
+
+        if (str == "LINEAR")
+            coordinateSpace = CoordinateSpace::LINEAR;
+        else if (str == "sRGB")
+            coordinateSpace = CoordinateSpace::sRGB;
+        else
+            coordinateSpace = CoordinateSpace::NO_PREFERENCE;
+
+        return input;
+    }
+
+    inline std::ostream& operator<<(std::ostream& output, const CoordinateSpace& coordinateSpace)
+    {
+        if (coordinateSpace == CoordinateSpace::LINEAR)
+            output << "LINEAR";
+        else if (coordinateSpace == CoordinateSpace::sRGB)
+            output << "sRGB";
+        else
+            output << "NO_PREFERENCE";
+
+        return output;
+    }
+
 } // namespace vsg

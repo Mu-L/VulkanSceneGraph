@@ -12,9 +12,9 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
 </editor-fold> */
 
+#include <vsg/app/Window.h>
 #include <vsg/core/observer_ptr.h>
 #include <vsg/ui/WindowEvent.h>
-#include <vsg/viewer/Window.h>
 
 namespace vsg
 {
@@ -272,6 +272,7 @@ namespace vsg
 
     enum KeyModifier : uint16_t
     {
+        MODKEY_OFF = 0,
         MODKEY_Shift = 1,
         MODKEY_CapsLock = 2,
         MODKEY_Control = 4,

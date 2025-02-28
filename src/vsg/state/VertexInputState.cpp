@@ -11,7 +11,6 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 </editor-fold> */
 
 #include <vsg/core/compare.h>
-#include <vsg/io/Options.h>
 #include <vsg/state/VertexInputState.h>
 #include <vsg/vk/Context.h>
 
@@ -40,10 +39,10 @@ VertexInputState::~VertexInputState()
 
 int VertexInputState::compare(const Object& rhs_object) const
 {
-    int result = Object::compare(rhs_object);
+    int result = GraphicsPipelineState::compare(rhs_object);
     if (result != 0) return result;
 
-    auto& rhs = static_cast<decltype(*this)>(rhs_object);
+    const auto& rhs = static_cast<decltype(*this)>(rhs_object);
 
     if ((result = compare_value_container(vertexBindingDescriptions, rhs.vertexBindingDescriptions))) return result;
     return compare_value_container(vertexAttributeDescriptions, rhs.vertexAttributeDescriptions);
@@ -51,7 +50,7 @@ int VertexInputState::compare(const Object& rhs_object) const
 
 void VertexInputState::read(Input& input)
 {
-    Object::read(input);
+    GraphicsPipelineState::read(input);
 
     vertexBindingDescriptions.resize(input.readValue<uint32_t>("NumBindings"));
     for (auto& binding : vertexBindingDescriptions)
@@ -73,7 +72,7 @@ void VertexInputState::read(Input& input)
 
 void VertexInputState::write(Output& output) const
 {
-    Object::write(output);
+    GraphicsPipelineState::write(output);
 
     output.writeValue<uint32_t>("NumBindings", vertexBindingDescriptions.size());
     for (auto& binding : vertexBindingDescriptions)

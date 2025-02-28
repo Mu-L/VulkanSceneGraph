@@ -10,7 +10,6 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
 </editor-fold> */
 
-#include <vsg/io/Options.h>
 #include <vsg/ui/CollectEvents.h>
 #include <vsg/ui/PlayEvents.h>
 #include <vsg/ui/ShiftEventTime.h>
@@ -32,13 +31,13 @@ PlayEvents::PlayEvents(vsg::ref_ptr<vsg::Object> object, vsg::clock::time_point:
 
 bool PlayEvents::dispatchFrameEvents(vsg::UIEvents& viewer_events)
 {
-    // find the last (w.r.t time) event in the viewer_events - typically the viewer's FraameEvent
+    // find the last (w.r.t time) event in the viewer_events - typically the viewer's FrameEvent
     auto max_itr = std::max_element(viewer_events.begin(), viewer_events.end(), [](const vsg::ref_ptr<vsg::UIEvent>& lhs, const vsg::ref_ptr<vsg::UIEvent>& rhs) {
         return lhs->time < rhs->time;
     });
 
     // clear the list of frameEvents that we will want to pass to the viewer
-    // to be filled in be the PlayUIEvents::apply(..) methods.
+    // to be filled in by the PlayUIEvents::apply(..) methods.
     frameEnd = false;
     frameEvents.clear();
 

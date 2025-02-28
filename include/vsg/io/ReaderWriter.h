@@ -30,7 +30,7 @@ namespace vsg
     };
     VSG_type_name(vsg::ReadError);
 
-    /// Base class from providing support for reading and/or writing various file formats and IO protocols
+    /// Base class for providing support for reading and/or writing various file formats and IO protocols
     class VSG_DECLSPEC ReaderWriter : public Inherit<Object, ReaderWriter>
     {
     public:
@@ -100,7 +100,7 @@ namespace vsg
     };
     VSG_type_name(vsg::ReaderWriter);
 
-    /// Class for managing a list of ReaderWriter, providing a single read/write call to invoke each RaderWriter in turn until success
+    /// Class for managing a list of ReaderWriter, providing a single read/write call to invoke each ReaderWriter in turn until success
     class VSG_DECLSPEC CompositeReaderWriter : public Inherit<ReaderWriter, CompositeReaderWriter>
     {
     public:
@@ -127,5 +127,8 @@ namespace vsg
     protected:
     };
     VSG_type_name(vsg::CompositeReaderWriter);
+
+    /// Get the Features supported by the ReaderWriters assigned to Options object.
+    extern VSG_DECLSPEC bool getFeatures(ref_ptr<const Options> options, ReaderWriter::Features& features);
 
 } // namespace vsg

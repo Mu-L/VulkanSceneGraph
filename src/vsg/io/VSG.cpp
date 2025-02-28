@@ -93,30 +93,30 @@ void VSG::writeHeader(std::ostream& fout, const FormatInfo& formatInfo) const
 
 vsg::ref_ptr<vsg::Object> VSG::read(const vsg::Path& filename, ref_ptr<const Options> options) const
 {
-    auto ext = vsg::lowerCaseFileExtension(filename);
-    if (ext == ".vsga" || ext == ".vsgt" || ext == ".vsgb")
+    CPU_INSTRUMENTATION_L1_NC(options ? options->instrumentation.get() : nullptr, "VSG read", COLOR_READ);
+
+    if (!compatibleExtension(filename, options, ".vsgb", ".vsgt")) return {};
+
+    vsg::Path filenameToUse = findFile(filename, options);
+    if (!filenameToUse) return {};
+
+    std::ifstream fin(filenameToUse, std::ios::in | std::ios::binary);
+    if (!fin) return {};
+
+    auto [type, version] = readHeader(fin);
+    if (type == BINARY)
     {
-        vsg::Path filenameToUse = findFile(filename, options);
-        if (!filenameToUse) return {};
-
-        std::ifstream fin(filenameToUse, std::ios::in | std::ios::binary);
-        if (!fin) return {};
-
-        auto [type, version] = readHeader(fin);
-        if (type == BINARY)
-        {
-            vsg::BinaryInput input(fin, _objectFactory, options);
-            input.filename = filenameToUse;
-            input.version = version;
-            return input.readObject("Root");
-        }
-        else if (type == ASCII)
-        {
-            vsg::AsciiInput input(fin, _objectFactory, options);
-            input.filename = filenameToUse;
-            input.version = version;
-            return input.readObject("Root");
-        }
+        vsg::BinaryInput input(fin, _objectFactory, options);
+        input.filename = filenameToUse;
+        input.version = version;
+        return input.readObject("Root");
+    }
+    else if (type == ASCII)
+    {
+        vsg::AsciiInput input(fin, _objectFactory, options);
+        input.filename = filenameToUse;
+        input.version = version;
+        return input.readObject("Root");
     }
 
     // return null as no means for loading file has been found
@@ -125,13 +125,9 @@ vsg::ref_ptr<vsg::Object> VSG::read(const vsg::Path& filename, ref_ptr<const Opt
 
 vsg::ref_ptr<vsg::Object> VSG::read(std::istream& fin, vsg::ref_ptr<const vsg::Options> options) const
 {
-    if (options && !options->extensionHint.empty())
-    {
-        if (options->extensionHint != ".vsgb" && options->extensionHint != ".vsgt")
-        {
-            return {};
-        }
-    }
+    CPU_INSTRUMENTATION_L1_NC(options ? options->instrumentation.get() : nullptr, "VSG read", COLOR_READ);
+
+    if (options && !compatibleExtension(options, ".vsgb", ".vsgt")) return {};
 
     auto [type, version] = readHeader(fin);
     if (type == BINARY)
@@ -152,13 +148,9 @@ vsg::ref_ptr<vsg::Object> VSG::read(std::istream& fin, vsg::ref_ptr<const vsg::O
 
 vsg::ref_ptr<vsg::Object> VSG::read(const uint8_t* ptr, size_t size, vsg::ref_ptr<const vsg::Options> options) const
 {
-    if (options && !options->extensionHint.empty())
-    {
-        if (options->extensionHint != ".vsgb" && options->extensionHint != ".vsgt")
-        {
-            return {};
-        }
-    }
+    CPU_INSTRUMENTATION_L1_NC(options ? options->instrumentation.get() : nullptr, "VSG read", COLOR_READ);
+
+    if (options && !compatibleExtension(options, ".vsgb", ".vsgt")) return {};
 
     mem_stream fin(ptr, size);
     return read(fin, options);
@@ -166,6 +158,8 @@ vsg::ref_ptr<vsg::Object> VSG::read(const uint8_t* ptr, size_t size, vsg::ref_pt
 
 bool VSG::write(const vsg::Object* object, const vsg::Path& filename, ref_ptr<const Options> options) const
 {
+    CPU_INSTRUMENTATION_L1_NC(options ? options->instrumentation.get() : nullptr, "VSG write", COLOR_READ);
+
     auto version = vsgGetVersion();
 
     if (options)
@@ -190,7 +184,7 @@ bool VSG::write(const vsg::Object* object, const vsg::Path& filename, ref_ptr<co
     }
     else if (ext == ".vsga" || ext == ".vsgt")
     {
-        std::ofstream fout(filename);
+        std::ofstream fout(filename, std::ios::out | std::ios::binary);
         writeHeader(fout, FormatInfo{ASCII, version});
 
         vsg::AsciiOutput output(fout, options);
@@ -206,22 +200,16 @@ bool VSG::write(const vsg::Object* object, const vsg::Path& filename, ref_ptr<co
 
 bool VSG::write(const vsg::Object* object, std::ostream& fout, ref_ptr<const Options> options) const
 {
+    CPU_INSTRUMENTATION_L1_NC(options ? options->instrumentation.get() : nullptr, "VSG write", COLOR_WRITE);
+
+    if (options && !compatibleExtension(options, ".vsgb", ".vsgt")) return {};
+
     auto version = vsgGetVersion();
     bool asciiFormat = true;
 
     if (options)
     {
-        if (!options->extensionHint.empty())
-        {
-            if (options->extensionHint == ".vsgb")
-            {
-                asciiFormat = false;
-            }
-            else if (options->extensionHint != ".vsgt")
-            {
-                return false;
-            }
-        }
+        if (options->extensionHint && options->extensionHint == ".vsgb") asciiFormat = false;
 
         std::string version_string;
         if (options->getValue("version", version_string))

@@ -12,7 +12,6 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
 #include <vsg/core/Exception.h>
 #include <vsg/core/compare.h>
-#include <vsg/io/Options.h>
 #include <vsg/state/Image.h>
 #include <vsg/vk/Context.h>
 
@@ -103,6 +102,8 @@ Image::Image(ref_ptr<Data> in_data) :
             format = static_cast<VkFormat>(format + 7);
         else if (format >= VK_FORMAT_R32G32B32_UINT && format <= VK_FORMAT_R32G32B32_SFLOAT)
             format = static_cast<VkFormat>(format + 3);
+
+        usage = (VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT);
     }
 }
 
@@ -123,10 +124,22 @@ int Image::compare(const Object& rhs_object) const
     int result = Object::compare(rhs_object);
     if (result != 0) return result;
 
-    auto& rhs = static_cast<decltype(*this)>(rhs_object);
+    const auto& rhs = static_cast<decltype(*this)>(rhs_object);
 
     if ((result = compare_pointer(data, rhs.data))) return result;
-    return compare_region(flags, initialLayout, rhs.flags);
+
+    if ((result = compare_value(flags, rhs.flags))) return result;
+    if ((result = compare_value(imageType, rhs.imageType))) return result;
+    if ((result = compare_value(format, rhs.format))) return result;
+    if ((result = compare_memory(extent, rhs.extent))) return result;
+    if ((result = compare_value(mipLevels, rhs.mipLevels))) return result;
+    if ((result = compare_value(arrayLayers, rhs.arrayLayers))) return result;
+    if ((result = compare_value(samples, rhs.samples))) return result;
+    if ((result = compare_value(tiling, rhs.tiling))) return result;
+    if ((result = compare_value(usage, rhs.usage))) return result;
+    if ((result = compare_value(sharingMode, rhs.sharingMode))) return result;
+    if ((result = compare_value_container(queueFamilyIndices, rhs.queueFamilyIndices))) return result;
+    return compare_value(initialLayout, rhs.initialLayout);
 }
 
 VkResult Image::bind(DeviceMemory* deviceMemory, VkDeviceSize memoryOffset)
@@ -191,7 +204,7 @@ void Image::compile(Device* device)
 
     if (VkResult result = vkCreateImage(*vd.device, &info, vd.device->getAllocationCallbacks(), &vd.image); result != VK_SUCCESS)
     {
-        throw Exception{"Error: Failed to create vkImage.", result};
+        throw Exception{"Error: Failed to create VkImage.", result};
     }
 }
 
@@ -209,7 +222,7 @@ void Image::compile(Context& context)
 
     if (!deviceMemory)
     {
-        throw Exception{"Error: allocate memory to reserve slot.", VK_ERROR_OUT_OF_DEVICE_MEMORY};
+        throw Exception{"Error: Image failed to reserve slot from deviceMemoryBufferPools.", VK_ERROR_OUT_OF_DEVICE_MEMORY};
     }
 
     vd.requiresDataCopy = data.valid();
