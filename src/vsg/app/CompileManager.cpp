@@ -41,7 +41,7 @@ void CompileResult::add(const CompileResult& cr)
         result = cr.result;
     }
 
-    maxSlots.merge(cr.maxSlots);
+    maxSlots.update(cr.maxSlots);
 
     if (!containsPagedLOD) containsPagedLOD = cr.containsPagedLOD;
 
@@ -57,7 +57,7 @@ void CompileResult::add(const CompileResult& cr)
     dynamicData.add(cr.dynamicData);
 }
 
-bool CompileResult::requiresViewerUpdate() const
+bool CompileResult::requiresViewerUpdate(const Viewer* viewer) const
 {
     if (result == VK_INCOMPLETE) return false;
 
@@ -67,6 +67,18 @@ bool CompileResult::requiresViewerUpdate() const
     {
         if (!binDetails.indices.empty() || !binDetails.bins.empty()) return true;
     }
+
+    if (viewer)
+    {
+        for (const auto& task : viewer->recordAndSubmitTasks)
+        {
+            for (const auto& commandGraph : task->commandGraphs)
+            {
+                if (commandGraph->maxSlots.requiresUpdate(maxSlots)) return true;
+            }
+        }
+    }
+
     return false;
 }
 

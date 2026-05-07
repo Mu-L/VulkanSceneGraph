@@ -66,7 +66,7 @@ DescriptorPoolSizes ResourceRequirements::computeDescriptorPoolSizes() const
 
 void ResourceRequirements::apply(const ResourceHints& resourceHints)
 {
-    maxSlots.merge(resourceHints.maxSlots);
+    maxSlots.update(resourceHints.maxSlots);
 
     if (!resourceHints.descriptorPoolSizes.empty() || resourceHints.numDescriptorSets > 0)
     {

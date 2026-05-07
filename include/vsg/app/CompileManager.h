@@ -20,6 +20,7 @@ namespace vsg
 
     // forward declare
     class RecordAndSubmitTask;
+    class Viewer;
 
     /// CompileResult struct encapsulates the results of compile traversal.
     /// Used to help guide further operations done with the compiled subgraph.
@@ -36,7 +37,7 @@ namespace vsg
 
         void reset();
         void add(const CompileResult& cr);
-        bool requiresViewerUpdate() const;
+        bool requiresViewerUpdate(const Viewer* viewer = nullptr) const;
     };
 
     /// ResourceScavenger provides a mechanism for releasing and reusing unused resources when allocation of required GPU memory fails.

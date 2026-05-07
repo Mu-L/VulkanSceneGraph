@@ -794,15 +794,20 @@ void Viewer::update()
 {
     CPU_INSTRUMENTATION_L1_NC(instrumentation, "Viewer update", COLOR_UPDATE);
 
+    CompileResult cr;
+
     // merge any updates from the DatabasePager
     for (const auto& task : recordAndSubmitTasks)
     {
         if (task->databasePager)
         {
-            CompileResult cr;
             task->databasePager->updateSceneGraph(_frameStamp, cr);
-            if (cr.requiresViewerUpdate()) updateViewer(*this, cr);
         }
+    }
+
+    if (cr.requiresViewerUpdate(this))
+    {
+        updateViewer(*this, cr);
     }
 
     // run update operations
