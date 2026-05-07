@@ -306,7 +306,7 @@ void vsg::updateTasks(RecordAndSubmitTasks& tasks, ref_ptr<CompileManager> compi
     {
         for (const auto& commandGraph : task->commandGraphs)
         {
-            commandGraph->maxSlots.merge(compileResult.maxSlots);
+            commandGraph->maxSlots.update(compileResult.maxSlots);
         }
     }
 

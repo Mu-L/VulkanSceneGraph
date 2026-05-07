@@ -201,7 +201,7 @@ VkResult Context::reserve(ResourceRequirements& requirements)
 
     if (deviceMemoryBufferPools->compileTraversalUseReserve) result = deviceMemoryBufferPools->reserve(requirements);
 
-    resourceRequirements.maxSlots.merge(requirements.maxSlots);
+    resourceRequirements.maxSlots.update(requirements.maxSlots);
 
     descriptorPools->reserve(requirements);
 
