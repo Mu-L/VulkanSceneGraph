@@ -36,7 +36,7 @@ namespace vsg
         VkResult status();
 
     protected:
-        virtual ~Event();
+        ~Event() override;
 
         VkEvent _event;
         ref_ptr<Device> _device;
