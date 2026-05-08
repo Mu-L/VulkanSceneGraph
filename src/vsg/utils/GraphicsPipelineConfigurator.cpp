@@ -607,7 +607,8 @@ int GraphicsPipelineConfigurator::compare(const Object& rhs_object) const
                         return *lhs.itr;
                     else if (*rhs.itr < *lhs.itr)
                         return *rhs.itr;
-                    else { return *rhs.itr; }
+                    else
+                        return *rhs.itr;
                 }
                 else
                     return *lhs.itr;

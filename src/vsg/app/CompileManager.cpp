@@ -246,7 +246,7 @@ CompileResult CompileManager::compile(ref_ptr<Object> object, ContextSelectionFu
     // if no CompileTraversals are available abort compile
     if (!compileTraversal)
     {
-        info("Unable to aquire compileTraversal.");
+        debug("Unable to aquire compileTraversal.");
         return result;
     }
 

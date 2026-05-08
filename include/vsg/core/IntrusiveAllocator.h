@@ -142,7 +142,7 @@ namespace vsg
             struct VSG_DECLSPEC SlotTester
             {
                 SlotTester(Element* in_mem, size_t in_head) :
-                    mem(in_mem), head(in_head){};
+                    mem(in_mem), head(in_head) {};
 
                 const Element* mem = nullptr;
                 size_t head = 0;
