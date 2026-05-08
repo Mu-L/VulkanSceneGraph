@@ -59,7 +59,7 @@ namespace vsg
         void report(LogOutput& out) const;
 
     protected:
-        virtual ~DeviceMemory();
+        ~DeviceMemory() override;
 
         VkDeviceMemory _deviceMemory;
         VkMemoryRequirements _memoryRequirements;
@@ -105,7 +105,7 @@ namespace vsg
             return data;
         }
 
-        virtual ~MappedData()
+        ~MappedData() override
         {
             T::dataRelease(); // make sure that the Array doesn't delete this memory
             _deviceMemory->unmap();

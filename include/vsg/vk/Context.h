@@ -70,7 +70,7 @@ namespace vsg
 
         Context(const Context& context);
 
-        virtual ~Context();
+        ~Context() override;
 
         const uint32_t deviceID = 0;
         ref_ptr<Device> device;

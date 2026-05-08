@@ -90,7 +90,7 @@ namespace vsg
         }
 
     protected:
-        virtual ~Instance();
+        ~Instance() override;
 
         VkInstance _instance;
         ref_ptr<AllocationCallbacks> _allocator;
