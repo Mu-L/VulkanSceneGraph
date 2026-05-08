@@ -94,7 +94,7 @@ namespace vsg
         CommandBuffers buffers() const;
 
     protected:
-        ~RecordedCommandBuffers();
+        ~RecordedCommandBuffers() override;
         mutable std::mutex _mutex;
         std::map<int, ref_ptr<RecordedCommandBuffers>> _orderedCommandBuffers;
         CommandBuffers _commandBuffers;

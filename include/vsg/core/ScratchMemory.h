@@ -37,7 +37,7 @@ namespace vsg
         ScratchMemory(const ScratchMemory&) = delete;
         ScratchMemory& operator=(const ScratchMemory&) = delete;
 
-        ~ScratchMemory()
+        ~ScratchMemory() override
         {
             delete[] buffer;
         }
