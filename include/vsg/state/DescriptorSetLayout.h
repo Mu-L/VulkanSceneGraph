@@ -70,7 +70,7 @@ namespace vsg
         {
             Implementation(Device* device, VkDescriptorSetLayoutCreateFlags createFlags, const DescriptorSetLayoutBindings& descriptorSetLayoutBindings, const DescriptorSetLayoutBindingFlags& descriptorSetLayoutBindingFlags);
 
-            virtual ~Implementation();
+            ~Implementation() override;
 
             ref_ptr<Device> _device;
             VkDescriptorSetLayout _descriptorSetLayout;

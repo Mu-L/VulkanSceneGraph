@@ -111,7 +111,7 @@ namespace vsg
         {
             Implementation(Device* device, ShaderModule* shader);
 
-            virtual ~Implementation();
+            ~Implementation() override;
 
             VkShaderModule _shaderModule;
             ref_ptr<Device> _device;

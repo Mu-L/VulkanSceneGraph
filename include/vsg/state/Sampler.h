@@ -65,7 +65,7 @@ namespace vsg
         {
             Implementation(Device* device, const VkSamplerCreateInfo& createSamplerInfo);
 
-            virtual ~Implementation();
+            ~Implementation() override;
 
             VkSampler _sampler;
             ref_ptr<Device> _device;

@@ -94,7 +94,7 @@ namespace vsg
         {
             Implementation(Context& context, Device* device, const RenderPass* renderPass, const PipelineLayout* pipelineLayout, const ShaderStages& shaderStages, const GraphicsPipelineStates& pipelineStates, uint32_t subpass);
 
-            virtual ~Implementation();
+            ~Implementation() override;
 
             GraphicsPipelineStates _pipelineStates;
             VkPipeline _pipeline;

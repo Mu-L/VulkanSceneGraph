@@ -76,7 +76,7 @@ namespace vsg
             static void recycle(ref_ptr<DescriptorSet::Implementation>& dsi);
 
         protected:
-            virtual ~Implementation();
+            ~Implementation() override;
 
             friend DescriptorPool;
 

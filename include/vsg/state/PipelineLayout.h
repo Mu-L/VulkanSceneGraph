@@ -60,7 +60,7 @@ namespace vsg
         {
             Implementation(Device* device, const DescriptorSetLayouts& descriptorSetLayouts, const PushConstantRanges& pushConstantRanges, VkPipelineLayoutCreateFlags flags = 0);
 
-            virtual ~Implementation();
+            ~Implementation() override;
 
             VkPipelineLayout _pipelineLayout;
 

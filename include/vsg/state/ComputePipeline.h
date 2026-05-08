@@ -50,7 +50,7 @@ namespace vsg
         struct Implementation : public Inherit<Object, Implementation>
         {
             Implementation(Context& context, Device* device, const PipelineLayout* pipelineLayout, const ShaderStage* shaderStage);
-            virtual ~Implementation();
+            ~Implementation() override;
 
             VkPipeline _pipeline;
             ref_ptr<Device> _device;

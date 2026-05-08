@@ -112,7 +112,7 @@ namespace vsg
         Nodes take_all(CompileResult& result);
 
     protected:
-        virtual ~DatabaseQueue();
+        ~DatabaseQueue() override;
 
         std::mutex _mutex;
         std::condition_variable _cv;
@@ -168,7 +168,7 @@ namespace vsg
         ref_ptr<DeleteQueue> deleteQueue;
 
     protected:
-        virtual ~DatabasePager();
+        ~DatabasePager() override;
 
         void requestDiscarded(PagedLOD* plod);
 
