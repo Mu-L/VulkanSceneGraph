@@ -71,7 +71,7 @@ namespace vsg
         virtual void finish() const {}
 
     protected:
-        virtual ~Instrumentation();
+        ~Instrumentation() override;
     };
     VSG_type_name(vsg::Instrumentation);
 

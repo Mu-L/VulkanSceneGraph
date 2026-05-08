@@ -78,7 +78,7 @@ namespace vsg
         void write(Output& output) const override;
 
     protected:
-        virtual ~PagedLOD();
+        ~PagedLOD() override;
 
     public:
         ref_ptr<Options> options;
