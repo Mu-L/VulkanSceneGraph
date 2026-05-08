@@ -122,7 +122,7 @@ namespace vsg
         size_t clear();
 
     protected:
-        virtual ~DeleteQueue();
+        ~DeleteQueue() override;
 
         std::mutex _mutex;
         std::condition_variable _cv;

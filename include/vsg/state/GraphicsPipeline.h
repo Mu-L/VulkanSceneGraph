@@ -128,7 +128,7 @@ namespace vsg
         virtual void release();
 
     public:
-        virtual ~BindGraphicsPipeline();
+        ~BindGraphicsPipeline() override;
     };
     VSG_type_name(vsg::BindGraphicsPipeline);
 
