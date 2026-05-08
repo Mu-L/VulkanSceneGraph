@@ -260,7 +260,7 @@ namespace vsg
 
         C dest;
         dest.reserve(src.size());
-        for (auto& ptr : src)
+        for (const auto& ptr : src)
         {
             dest.push_back(operator()(ptr));
         }

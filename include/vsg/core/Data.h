@@ -144,10 +144,10 @@ namespace vsg
         Data(const Data& data, const CopyOp& copyop = {}) :
             Object(data, copyop), properties(data.properties) {}
 
-        explicit Data(Properties layout) :
+        explicit Data(const Properties& layout) :
             properties(layout) {}
 
-        Data(Properties layout, uint32_t min_stride) :
+        Data(const Properties& layout, uint32_t min_stride) :
             properties(layout)
         {
             if (properties.stride < min_stride) properties.stride = min_stride;
@@ -240,7 +240,7 @@ namespace vsg
         using Layout = Properties;
 
         /// deprecated: use data->properties = properties instead.
-        void setLayout(Layout layout)
+        void setLayout(const Layout& layout)
         {
             VkFormat previous_format = properties.format; // temporary hack to keep applications that call setFormat(..) before setLayout(..) working
             uint32_t previous_stride = properties.stride;
@@ -251,7 +251,7 @@ namespace vsg
         /// deprecated: use data->properties
         Layout& getLayout() { return properties; }
         /// deprecated: use data->properties
-        Layout getLayout() const { return properties; }
+        const Layout& getLayout() const { return properties; }
 #endif
     };
     VSG_type_name(vsg::Data);
