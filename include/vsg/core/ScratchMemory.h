@@ -42,7 +42,7 @@ namespace vsg
             delete[] buffer;
         }
 
-        uint8_t* align(uint8_t* p) const
+        static uint8_t* align(uint8_t* p)
         {
             auto alignment = sizeof(p);
             uint8_t* new_p = reinterpret_cast<uint8_t*>(((reinterpret_cast<size_t>(p) + alignment - 1) / alignment) * alignment);
