@@ -344,7 +344,7 @@ namespace vsg
         const_iterator end() const { return const_iterator{data(_size), properties.stride}; }
 
     protected:
-        virtual ~Array()
+        ~Array() override
         {
             _delete();
         }

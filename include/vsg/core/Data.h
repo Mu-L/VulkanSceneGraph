@@ -227,7 +227,7 @@ namespace vsg
         const MipmapLayout* getMipmapLayout() const;
 
     protected:
-        virtual ~Data() {}
+        ~Data() override {}
 
         void _copy(const Data& rhs);
         void _clear();

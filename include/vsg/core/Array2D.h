@@ -340,7 +340,7 @@ namespace vsg
         const_iterator end() const { return const_iterator{data(_width * _height), properties.stride}; }
 
     protected:
-        virtual ~Array2D()
+        ~Array2D() override
         {
             _delete();
         }
