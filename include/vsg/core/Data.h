@@ -233,26 +233,6 @@ namespace vsg
         void _clear();
 
         ModifiedCount _modifiedCount;
-
-#if 1
-    public:
-        /// deprecated: provided for backwards compatibility, use Properties instead.
-        using Layout = Properties;
-
-        /// deprecated: use data->properties = properties instead.
-        void setLayout(const Layout& layout)
-        {
-            VkFormat previous_format = properties.format; // temporary hack to keep applications that call setFormat(..) before setLayout(..) working
-            uint32_t previous_stride = properties.stride;
-            properties = layout;
-            if (properties.format == 0 && previous_format != 0) properties.format = previous_format; // temporary hack to keep existing applications working
-            if (properties.stride == 0 && previous_stride != 0) properties.stride = previous_stride; // make sure the layout has a valid stride.
-        }
-        /// deprecated: use data->properties
-        Layout& getLayout() { return properties; }
-        /// deprecated: use data->properties
-        const Layout& getLayout() const { return properties; }
-#endif
     };
     VSG_type_name(vsg::Data);
 
