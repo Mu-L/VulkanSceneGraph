@@ -45,7 +45,7 @@ namespace vsg
         VkPipeline vk(uint32_t deviceID) const { return _implementation[deviceID]->_pipeline; }
 
     protected:
-        virtual ~ComputePipeline();
+        ~ComputePipeline() override;
 
         struct Implementation : public Inherit<Object, Implementation>
         {
@@ -80,7 +80,7 @@ namespace vsg
         void compile(Context& context) override;
 
     public:
-        virtual ~BindComputePipeline();
+        ~BindComputePipeline() override;
     };
     VSG_type_name(vsg::BindComputePipeline);
 

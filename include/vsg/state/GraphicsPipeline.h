@@ -44,7 +44,7 @@ namespace vsg
         void write(Output& output) const override;
 
     protected:
-        virtual ~GraphicsPipelineState() {}
+        ~GraphicsPipelineState() override {}
     };
     VSG_type_name(vsg::GraphicsPipelineState);
 
@@ -88,7 +88,7 @@ namespace vsg
         void release() { _implementation.clear(); }
 
     protected:
-        virtual ~GraphicsPipeline();
+        ~GraphicsPipeline() override;
 
         struct Implementation : public Inherit<Object, Implementation>
         {

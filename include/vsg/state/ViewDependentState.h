@@ -88,7 +88,7 @@ namespace vsg
         void record(CommandBuffer& commandBuffer) const override;
 
     protected:
-        virtual ~BindViewDescriptorSets() {}
+        ~BindViewDescriptorSets() override {}
     };
     VSG_type_name(vsg::BindViewDescriptorSets);
 

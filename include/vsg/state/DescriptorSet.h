@@ -85,7 +85,7 @@ namespace vsg
         };
 
     protected:
-        virtual ~DescriptorSet();
+        ~DescriptorSet() override;
 
         vk_buffer<ref_ptr<Implementation>> _implementation;
     };

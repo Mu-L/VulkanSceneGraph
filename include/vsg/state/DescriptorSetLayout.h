@@ -64,7 +64,7 @@ namespace vsg
         void write(Output& output) const override;
 
     protected:
-        virtual ~DescriptorSetLayout();
+        ~DescriptorSetLayout() override;
 
         struct Implementation : public Inherit<Object, Implementation>
         {

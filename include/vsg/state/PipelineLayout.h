@@ -54,7 +54,7 @@ namespace vsg
         void write(Output& output) const override;
 
     protected:
-        virtual ~PipelineLayout();
+        ~PipelineLayout() override;
 
         struct Implementation : public Inherit<Object, Implementation>
         {

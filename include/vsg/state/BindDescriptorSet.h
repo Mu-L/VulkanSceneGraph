@@ -74,7 +74,7 @@ namespace vsg
         void record(CommandBuffer& commandBuffer) const override;
 
     protected:
-        virtual ~BindDescriptorSets() {}
+        ~BindDescriptorSets() override {}
 
         struct VulkanData
         {

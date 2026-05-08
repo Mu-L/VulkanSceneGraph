@@ -105,7 +105,7 @@ namespace vsg
         void write(Output& output) const override;
 
     protected:
-        virtual ~ShaderModule();
+        ~ShaderModule() override;
 
         struct Implementation : public Inherit<Object, Implementation>
         {

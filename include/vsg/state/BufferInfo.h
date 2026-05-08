@@ -74,7 +74,7 @@ namespace vsg
         vk_buffer<ModifiedCount> copiedModifiedCounts;
 
     protected:
-        virtual ~BufferInfo();
+        ~BufferInfo() override;
     };
     VSG_type_name(vsg::BufferInfo);
 
