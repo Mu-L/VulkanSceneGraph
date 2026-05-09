@@ -33,7 +33,7 @@ namespace vsg
         void write(Output& output) const override;
 
     protected:
-        virtual ~AmbientLight() {}
+        ~AmbientLight() override {}
     };
     VSG_type_name(vsg::AmbientLight);
 

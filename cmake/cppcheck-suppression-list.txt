@@ -152,6 +152,7 @@ arrayIndexOutOfBounds:*/include/vsg/vk/State.h
 // suppress warnings about intentional code usage or where cppcheck just hasn't got a clue about how templates are used...
 knownConditionTrueFalse:*/src/vsg/utils/Builder.cpp
 knownConditionTrueFalse:*/include/vsg/utils/CommandLine.h
+knownConditionTrueFalse:*/include/vsg/utils/Inherit.h
 
 // suppress warning about initializtion.
 useInitializationList:*/include/vsg/core/ScratchMemory.h
