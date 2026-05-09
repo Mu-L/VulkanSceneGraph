@@ -48,7 +48,7 @@ namespace vsg
         explicit IntrusiveAllocator(size_t in_defaultAlignment = 8);
         explicit IntrusiveAllocator(std::unique_ptr<Allocator> in_nestedAllocator, size_t in_defaultAlignment = 8);
 
-        ~IntrusiveAllocator();
+        ~IntrusiveAllocator() override;
 
         void report(std::ostream& out) const override;
 

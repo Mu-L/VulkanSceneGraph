@@ -57,7 +57,7 @@ namespace vsg
         void record(CommandBuffer& commandBuffer) const override;
 
     protected:
-        virtual ~SetEvent();
+        ~SetEvent() override;
     };
     VSG_type_name(vsg::SetEvent);
 
@@ -73,7 +73,7 @@ namespace vsg
         void record(CommandBuffer& commandBuffer) const override;
 
     protected:
-        virtual ~ResetEvent();
+        ~ResetEvent() override;
     };
     VSG_type_name(vsg::ResetEvent);
 
@@ -107,7 +107,7 @@ namespace vsg
         ImageMemoryBarriers imageMemoryBarriers;
 
     protected:
-        virtual ~WaitEvents();
+        ~WaitEvents() override;
     };
     VSG_type_name(vsg::WaitEvents);
 
