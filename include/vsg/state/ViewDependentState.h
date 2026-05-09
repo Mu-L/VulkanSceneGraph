@@ -175,7 +175,7 @@ namespace vsg
         mutable std::vector<ShadowMap> shadowMaps;
 
     protected:
-        ~ViewDependentState();
+        ~ViewDependentState() override;
     };
     VSG_type_name(vsg::ViewDependentState);
 

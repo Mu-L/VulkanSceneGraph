@@ -243,3 +243,7 @@ constVariablePointer:*/src/vsg/app/SecondaryCommandGraph.cpp
 // suppress inappropriate warning
 passedByValue:*/src/vsg/vk/Device.cpp
 passedByValue:*/src/vsg/vk/Instance.cpp
+
+// suppress inapproach functionStatic warnings
+functionStatic:*/include/vsg/io/Output.h
+functionStatic:*/include/vsg/io/Input.h
