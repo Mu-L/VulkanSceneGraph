@@ -98,7 +98,7 @@ namespace vsg
         }
 
         template<typename... Args>
-        static ref_ptr<MappedData> create(DeviceMemory* deviceMemory, VkDeviceSize offset, VkMemoryMapFlags flags, Data::Properties properties, Args... args)
+        static ref_ptr<MappedData> create(DeviceMemory* deviceMemory, VkDeviceSize offset, VkMemoryMapFlags flags, const Data::Properties& properties, Args... args)
         {
             auto data = ref_ptr<MappedData>(new MappedData(deviceMemory, offset, flags, args...));
             data->properties = properties;
