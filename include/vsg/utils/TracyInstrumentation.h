@@ -80,7 +80,7 @@ namespace vsg
         mutable std::map<ref_ptr<Device>, std::pair<tracy::VkCtx*, bool>> ctxMap;
 
     protected:
-        ~TracyContexts()
+        ~TracyContexts() override
         {
             for (auto itr = ctxMap.begin(); itr != ctxMap.end(); ++itr)
             {

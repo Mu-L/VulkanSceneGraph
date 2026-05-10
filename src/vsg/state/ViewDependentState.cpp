@@ -658,7 +658,7 @@ void ViewDependentState::traverse(RecordTraversal& rt) const
         dbox eyeSpaceRegionBounds;
         for (auto& [mv, regionOfInterest] : rt.regionsOfInterest)
         {
-            for (auto& v : regionOfInterest->points)
+            for (const auto& v : regionOfInterest->points)
             {
                 eyeSpaceRegionBounds.add(mv * v);
             }

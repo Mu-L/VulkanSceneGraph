@@ -92,7 +92,7 @@ void Viewer::removeWindow(ref_ptr<Window> window)
     CommandGraphs commandGraphs;
     for (const auto& task : recordAndSubmitTasks)
     {
-        for (auto& cg : task->commandGraphs)
+        for (const auto& cg : task->commandGraphs)
         {
             if (cg->window != window) commandGraphs.push_back(cg);
         }
@@ -582,7 +582,7 @@ void Viewer::addRecordAndSubmitTaskAndPresentation(CommandGraphs commandGraphs)
     CommandGraphs combinedCommandGraphs;
     for (const auto& task : recordAndSubmitTasks)
     {
-        for (auto& cg : task->commandGraphs)
+        for (const auto& cg : task->commandGraphs)
         {
             combinedCommandGraphs.push_back(cg);
         }
