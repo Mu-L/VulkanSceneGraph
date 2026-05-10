@@ -29,9 +29,6 @@ namespace vsg
     public:
         ref_ptr<Object> clone(const CopyOp& copyop = {}) const override { return AmbientLight::create(*this, copyop); }
 
-        void read(Input& input) override;
-        void write(Output& output) const override;
-
     protected:
         ~AmbientLight() override {}
     };
