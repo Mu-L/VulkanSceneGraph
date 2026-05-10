@@ -252,9 +252,12 @@ passedByValue:*/src/vsg/vk/Instance.cpp
 // suppress inappropriate warnings
 functionStatic:*/include/vsg/io/Output.h
 functionStatic:*/include/vsg/io/Input.h
-functionStatic:*/src/vsg/app/CompileManager.h
+functionStatic:*/include/vsg/app/CompileManager.h
+functionStatic:*/include/vsg/app/CompileManager.cpp
 functionStatic:*/include/vsg/app/RecordTraversal.h
+functionStatic:*/src/vsg/app/RecordTraversal.cpp
 functionStatic:*/include/vsg/io/VSG.h
+functionStatic:*/src/vsg/io/VSG.cpp
 functionStatic:*/include/vsg/io/json.h
 functionStatic:*/include/vsg/io/txt.h
 functionStatic:*/include/vsg/io/tile.h
