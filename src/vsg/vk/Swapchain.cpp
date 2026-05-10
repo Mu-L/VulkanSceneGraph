@@ -141,7 +141,7 @@ namespace vsg
         }
 
     protected:
-        virtual ~SwapchainImage()
+        ~SwapchainImage() override
         {
             for (auto& vd : _vulkanData)
             {

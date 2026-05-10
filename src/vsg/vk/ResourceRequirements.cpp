@@ -90,7 +90,7 @@ void ResourceRequirements::apply(const ResourceHints& resourceHints)
     viewportStateHint = resourceHints.viewportStateHint;
 
     dynamicData.add(resourceHints.dynamicData);
-    containsPagedLOD = containsPagedLOD | resourceHints.containsPagedLOD;
+    containsPagedLOD = containsPagedLOD || resourceHints.containsPagedLOD;
 }
 
 //////////////////////////////////////////////////////////////////////
