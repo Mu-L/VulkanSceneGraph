@@ -147,7 +147,7 @@ CompileManager::CompileManager(Viewer& viewer, ref_ptr<ResourceHints> hints)
 
 CompileManager::~CompileManager()
 {
-    vsg::info("CompileManager::~CompileManager() successfulCompileCount= ", successfulCompileCount, ", failedCompileCount = ", failedCompileCount);
+    vsg::debug("CompileManager::~CompileManager() successfulCompileCount= ", successfulCompileCount, ", failedCompileCount = ", failedCompileCount);
 }
 
 CompileManager::CompileTraversals::container_type CompileManager::takeCompileTraversals(size_t count)
