@@ -75,9 +75,9 @@ namespace vsg
             value[3] = rhs[3];
         }
 
-        constexpr std::size_t size() const { return 16; }
-        constexpr std::size_t columns() const { return 4; }
-        constexpr std::size_t rows() const { return 4; }
+        constexpr static std::size_t size() { return 16; }
+        constexpr static std::size_t columns() { return 4; }
+        constexpr static std::size_t rows() { return 4; }
 
         column_type& operator[](std::size_t c) { return value[c]; }
         const column_type& operator[](std::size_t c) const { return value[c]; }

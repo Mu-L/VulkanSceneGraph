@@ -162,7 +162,7 @@ namespace vsg
         void set(const value_type& value) { _value = value; }
 
     protected:
-        virtual ~Value() {}
+        ~Value() override {}
 
     private:
         value_type _value;

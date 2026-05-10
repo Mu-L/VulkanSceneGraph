@@ -105,13 +105,13 @@ namespace vsg
         void write(Output& output) const override;
 
     protected:
-        virtual ~ShaderModule();
+        ~ShaderModule() override;
 
         struct Implementation : public Inherit<Object, Implementation>
         {
             Implementation(Device* device, ShaderModule* shader);
 
-            virtual ~Implementation();
+            ~Implementation() override;
 
             VkShaderModule _shaderModule;
             ref_ptr<Device> _device;

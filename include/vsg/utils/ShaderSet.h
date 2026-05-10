@@ -196,7 +196,7 @@ namespace vsg
         void write(Output& output) const override;
 
     protected:
-        virtual ~ShaderSet();
+        ~ShaderSet() override;
 
         AttributeBinding _nullAttributeBinding;
         DescriptorBinding _nullDescriptorBinding;

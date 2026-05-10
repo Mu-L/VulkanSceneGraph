@@ -95,7 +95,7 @@ namespace vsg
         observer_ptr<TransferTask> transferTask;
 
     protected:
-        virtual ~Device();
+        ~Device() override;
 
         VkDevice _device;
 

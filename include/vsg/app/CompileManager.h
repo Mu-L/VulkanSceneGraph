@@ -91,7 +91,7 @@ namespace vsg
         std::atomic_uint failedCompileCount{0};
 
     protected:
-        ~CompileManager();
+        ~CompileManager() override;
 
         using CompileTraversals = ThreadSafeQueue<ref_ptr<CompileTraversal>>;
         size_t numCompileTraversals = 0;

@@ -60,7 +60,7 @@ namespace vsg
         VkResult acquireNextImage(uint64_t timeout, ref_ptr<Semaphore> semaphore, ref_ptr<Fence> fence, uint32_t& imageIndex);
 
     protected:
-        virtual ~Swapchain();
+        ~Swapchain() override;
 
         vsg::ref_ptr<Device> _device;
         vsg::ref_ptr<Surface> _surface;

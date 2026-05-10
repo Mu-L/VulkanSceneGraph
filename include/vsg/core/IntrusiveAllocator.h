@@ -48,7 +48,7 @@ namespace vsg
         explicit IntrusiveAllocator(size_t in_defaultAlignment = 8);
         explicit IntrusiveAllocator(std::unique_ptr<Allocator> in_nestedAllocator, size_t in_defaultAlignment = 8);
 
-        ~IntrusiveAllocator();
+        ~IntrusiveAllocator() override;
 
         void report(std::ostream& out) const override;
 
@@ -104,9 +104,13 @@ namespace vsg
                     next(static_cast<Offset>(in_next)),
                     status(in_status) {}
 
-                Element() = default;
-                Element(const Element&) = default;
-                Element& operator=(const Element&) = default;
+                Element() : index(0) {}
+                Element(const Element& rhs) : index(rhs.index) {}
+                Element& operator=(const Element& rhs)
+                {
+                    index = rhs.index;
+                    return *this;
+                }
             };
 
             struct FreeList

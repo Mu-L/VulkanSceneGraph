@@ -76,7 +76,7 @@ namespace vsg
         void compile(Context& context) override;
 
     protected:
-        virtual ~InstanceNode();
+        ~InstanceNode() override;
     };
     VSG_type_name(vsg::InstanceNode);
 
